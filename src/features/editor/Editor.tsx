@@ -9,6 +9,7 @@ export const Editor = memo(function Editor({
   documents,
   file,
   line,
+  navigation = 0,
   readOnly = false,
   onPasteImage,
   onError,
@@ -16,6 +17,7 @@ export const Editor = memo(function Editor({
   documents: Documents;
   file: Document;
   line?: number;
+  navigation?: number;
   readOnly?: boolean;
   onPasteImage: (image: Blob) => Promise<string>;
   onError: (message: string) => void;
@@ -64,7 +66,7 @@ export const Editor = memo(function Editor({
     }
     editor.focus();
     return documents.bindEditor(file, (spec) => editor.dispatch(spec));
-  }, [documents, file, line]);
+  }, [documents, file, line, navigation]);
   useEffect(() => {
     const editor = view.current!;
     if (editable.current.get(editor.state) === undefined)

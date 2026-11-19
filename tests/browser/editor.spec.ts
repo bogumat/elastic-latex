@@ -38,3 +38,20 @@ test('source mode and keyboard pane resizing work at laptop sizes', async ({ pag
     true,
   );
 });
+
+test('folds and restores environments without changing their text', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const editor = page.locator('.cm-content');
+  await expect(editor).toContainText('A little room to think');
+  const before = await editor.innerText();
+  const marker = page.locator('.cm-foldGutter .cm-gutterElement').filter({ hasText: '⌄' }).first();
+  await expect(marker).toBeVisible();
+  await marker.click();
+  await expect(page.locator('.cm-foldPlaceholder')).toBeVisible();
+  await expect(editor).not.toContainText('Good ideas begin');
+  await page.locator('.cm-foldPlaceholder').click();
+  await expect(editor).toContainText('Good ideas begin');
+  expect(await editor.innerText()).toBe(before);
+});

@@ -44,6 +44,13 @@ export interface Backend {
   compile(projectId: string, root: string, onLog: (text: string) => void): Promise<BuildResult>;
   cancel(): Promise<void>;
   readArtifact(projectId: string, buildId: string): Promise<ArrayBuffer>;
+  sourceLocation(
+    projectId: string,
+    buildId: string,
+    page: number,
+    x: number,
+    y: number,
+  ): Promise<{ path: string; line: number }>;
   exportPdf(projectId: string, buildId: string, destination: string): Promise<void>;
   reloadFiles(projectId: string, paths: string[]): Promise<Record<string, FileData | null>>;
 }
@@ -66,6 +73,8 @@ export const backend: Backend = {
   },
   cancel: () => invoke('cancel_build'),
   readArtifact: (projectId, buildId) => invoke('read_artifact', { projectId, buildId }),
+  sourceLocation: (projectId, buildId, page, x, y) =>
+    invoke('source_location', { projectId, buildId, page, x, y }),
   exportPdf: (projectId, buildId, destination) =>
     invoke('export_pdf', { projectId, buildId, destination }),
   reloadFiles: (projectId, paths) => invoke('reload_files', { projectId, paths }),

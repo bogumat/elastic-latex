@@ -3,11 +3,14 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import {
   bracketMatching,
   defaultHighlightStyle,
+  foldGutter,
+  foldKeymap,
   indentOnInput,
   StreamLanguage,
   syntaxHighlighting,
 } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
+import { latexFolding } from './folding';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { EditorState } from '@codemirror/state';
 import {
@@ -35,6 +38,8 @@ const commands = [
 ];
 export const editorExtensions = [
   lineNumbers(),
+  foldGutter(),
+  latexFolding,
   highlightActiveLineGutter(),
   history(),
   drawSelection(),
@@ -58,6 +63,7 @@ export const editorExtensions = [
   }),
   keymap.of([
     ...defaultKeymap,
+    ...foldKeymap,
     ...historyKeymap,
     ...searchKeymap,
     ...completionKeymap,

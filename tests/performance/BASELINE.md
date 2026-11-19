@@ -46,3 +46,11 @@ Reproduced a resize feedback loop in Chrome with space-consuming scrollbars: a 5
 ## Authoring and clipboard extension
 
 Validation includes 16 passing Rust tests, 15 frontend tests, and 15 browser tests. New coverage checks exclusive file/folder creation, path containment, unique image assets, image limits, asynchronous paste position mapping, waiting for imports before saving/building, save/import failures, package insertion, and escaping spreadsheet/Markdown table contents. Clipboard events and Sheets HTML are synthesized in Chrome; they do not establish interoperability with every source application. The packaged native app visibly showed a pasted image asset, its generated figure and graphicx declaration, and a successful PDF render. Current package size is about 15.29 MiB; the initial shell remains about 246 KB and clipboard code loads with the workspace. The native latency/memory acceptance gate remains open.
+
+## Continuous PDF preview, SyncTeX and source folding
+
+The viewer now keeps page geometry for the whole document while painting only the visible range and one neighbour on each side. Canvas/text rendering is serialized and the pixel allowance is shared across displayed pages and replacements. A 40-page browser fixture verifies wheel scrolling, last-page access, page controls, zoom, canvas eviction and the canvas pixel cap. Fit-width scrollbar stability and thirty artifact replacements remain covered. These are object/pixel checks, not native CPU or process-memory benchmarks.
+
+The real TeX integration suite verifies inverse SyncTeX for text and an image in an included source file whose name contains spaces; the immutable published map survives a later failed build. Browser tests verify opening the source line from PDF-only view and explaining missing maps. Source folding covers nested environments, multiline brace groups and sections, ignoring comments and verbatim contents. The native performance acceptance gate remains open.
+
+Validation for this extension: 18 Rust tests (including real TeX/SyncTeX), 18 frontend tests, and 19 browser tests passed. TypeScript production build and macOS app packaging succeeded; the package is about 15.36 MiB.

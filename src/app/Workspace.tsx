@@ -52,6 +52,7 @@ export default function Workspace({
   const [active, setActive] = useState<string>();
   const [root, setRoot] = useState(initialRoot);
   const [line, setLine] = useState<number>();
+  const [navigation, setNavigation] = useState(0);
   const [building, setBuilding] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
   const [gitBusy, setGitBusy] = useState<GitAction | null>(null);
@@ -94,6 +95,7 @@ export default function Workspace({
         .then(() => {
           setActive(path);
           setLine(targetLine);
+          setNavigation((value) => value + 1);
         })
         .catch((reason) => onError(String(reason)));
     },
@@ -361,6 +363,7 @@ export default function Workspace({
                   documents={documents}
                   file={file}
                   line={line}
+                  navigation={navigation}
                   readOnly={gitBusy === 'pull' || reloadFailed}
                   onPasteImage={importImage}
                   onError={onError}
@@ -376,7 +379,19 @@ export default function Workspace({
             <div className="preview-pane">
               {artifact ? (
                 <Suspense fallback={<div className="empty-state">Loading PDF tools…</div>}>
-                  <Preview api={api} artifact={artifact} active={mode !== 'source'} />
+                  <Preview
+                    api={api}
+                    artifact={artifact}
+                    active={mode !== 'source'}
+                    onSource={(path, line) => {
+                      if (mode === 'pdf') setMode('split');
+                      if (builtRevision !== `${root}:${documents.revisions()}`)
+                        onError(
+                          'Source changed since this PDF was built. Compile again for accurate navigation.',
+                        );
+                      openFile(path, line);
+                    }}
+                  />
                 </Suspense>
               ) : (
                 <>

@@ -74,6 +74,9 @@ export const demo: Backend = {
   readArtifact: async () => {
     throw new Error('No compiled PDF.');
   },
+  sourceLocation: async () => {
+    throw new Error('PDF-to-source navigation requires a local build.');
+  },
   exportPdf: async () => {},
   reloadFiles: async () =>
     Object.fromEntries(

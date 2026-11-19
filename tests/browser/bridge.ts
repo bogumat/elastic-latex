@@ -22,14 +22,19 @@ const calls: { command: string; args: unknown }[] = [];
 Object.assign(globalThis, { elasticTest: { calls } });
 
 function fixturePdf() {
-  const stream = 'BT /F1 24 Tf 50 740 Td (Elastic PDF test) Tj ET';
+  const count = new URLSearchParams(location.search).has('multipage') ? 40 : 1;
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    `<< /Type /Pages /Kids [${Array.from({ length: count }, (_, i) => `${4 + i * 2} 0 R`).join(' ')}] /Count ${count} >>`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
   ];
+  for (let index = 0; index < count; index++) {
+    const stream = `BT /F1 24 Tf 50 740 Td (Elastic PDF test${count > 1 ? ` page ${index + 1}` : ''}) Tj ET`;
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + index * 2} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  }
   let text = '%PDF-1.4\n';
   const offsets = [0];
   for (const [index, object] of objects.entries()) {
@@ -37,10 +42,10 @@ function fixturePdf() {
     text += `${index + 1} 0 obj\n${object}\nendobj\n`;
   }
   const xref = text.length;
-  text += `xref\n0 6\n0000000000 65535 f \n${offsets
+  text += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
     .slice(1)
     .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
-    .join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    .join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return new TextEncoder().encode(text).buffer;
 }
 
@@ -121,6 +126,11 @@ mockIPC(
           elapsedMs: 200,
         };
       }
+      case 'source_location':
+        if (new URLSearchParams(location.search).has('nosynctex'))
+          throw new Error('This build has no SyncTeX data.');
+        extraFiles.set('chapters/mapped.tex', 'First line\nSecond line\nMapped source line');
+        return { path: 'chapters/mapped.tex', line: 3 };
       case 'read_artifact':
         return fixturePdf();
       case 'git_status':

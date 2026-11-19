@@ -276,6 +276,18 @@ pub async fn run(
             tokio::fs::copy(&pdf, &published)
                 .await
                 .map_err(|e| e.to_string())?;
+            // Publish the matching map beside the immutable PDF. A later failed
+            // build must never change navigation for the last successful preview.
+            if let Err(error) = tokio::fs::copy(
+                pdf.with_extension("synctex.gz"),
+                published.with_extension("synctex.gz"),
+            )
+            .await
+            {
+                tail.push_str(&format!(
+                    "\nPDF-to-source navigation unavailable: {error}\n"
+                ));
+            }
             artifact = Some(published);
         } else {
             status = "failed".into();

@@ -4,6 +4,7 @@ mod git;
 mod images;
 mod persistence;
 mod projects;
+mod synctex;
 
 use projects::{Project, Result};
 use std::{
@@ -70,6 +71,7 @@ async fn open_project(
     *state.project.lock().unwrap() = Some(project.clone());
     let old = state.artifact.lock().unwrap().take();
     if let Some((_, _, path)) = old {
+        let _ = tokio::fs::remove_file(path.with_extension("synctex.gz")).await;
         let _ = tokio::fs::remove_file(path).await;
     }
     Ok(project)
@@ -246,6 +248,7 @@ async fn compile(
                 .unwrap()
                 .replace((project_id, build_id, path));
             if let Some((_, _, path)) = old {
+                let _ = tokio::fs::remove_file(path.with_extension("synctex.gz")).await;
                 let _ = tokio::fs::remove_file(path).await;
             }
         }
@@ -274,6 +277,31 @@ fn artifact_path(state: &AppState, project_id: &str, build_id: &str) -> Result<P
         .filter(|(p, b, _)| p == project_id && b == build_id)
         .map(|(_, _, path)| path.clone())
         .ok_or("This PDF is no longer available.".into())
+}
+
+#[tauri::command]
+async fn source_location(
+    project_id: String,
+    build_id: String,
+    page: u32,
+    x: f64,
+    y: f64,
+    state: State<'_, AppState>,
+) -> Result<synctex::SourceLocation> {
+    // Serialize with publication/project switching, which can remove the artifact.
+    let _operation = state.operation.lock().await;
+    state.idle()?;
+    let project = state.project(&project_id)?;
+    let pdf = artifact_path(&state, &project_id, &build_id)?;
+    let tools = state.toolchain.get_or_init(builds::discover).await;
+    let executable = PathBuf::from(
+        tools
+            .latexmk
+            .as_ref()
+            .ok_or("Install a TeX distribution with SyncTeX.")?,
+    )
+    .with_file_name("synctex");
+    synctex::locate(&project, &pdf, &executable, page, x, y).await
 }
 
 #[tauri::command]
@@ -327,6 +355,7 @@ pub fn run() {
             compile,
             cancel_build,
             read_artifact,
+            source_location,
             export_pdf,
             recent_projects,
             reload_files,
