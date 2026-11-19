@@ -7,6 +7,27 @@ const edit = (documents: Documents, file: Document, text: string) =>
 afterEach(() => vi.useRealTimers());
 
 describe('document save coordination', () => {
+  it('allows explicit saving with autosave disabled', async () => {
+    vi.useFakeTimers();
+    const saveFile = vi.fn().mockResolvedValue('v2');
+    const documents = new Documents('project', { saveFile, readFile: vi.fn() });
+    const file = documents.add('main.tex', content);
+    documents.configure({ theme: 'light', fontSize: 18, tabSize: 4, wrap: false, autosave: false });
+    edit(documents, file, 'Manual save ');
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(saveFile).not.toHaveBeenCalled();
+    await documents.saveAll();
+    expect(saveFile).toHaveBeenCalledTimes(1);
+    documents.dispose();
+  });
+  it('retains a tab when saving it on close fails', async () => {
+    const documents = new Documents('project', { saveFile: vi.fn().mockRejectedValue('Disk unavailable'), readFile: vi.fn() });
+    const file = documents.add('main.tex', content);
+    edit(documents, file, 'Keep ');
+    await expect(documents.close(file.path)).rejects.toBe('Disk unavailable');
+    expect(documents.files.get(file.path)).toBe(file);
+    documents.dispose();
+  });
   it('retains buffers and undo history when moving a folder, then closes trashed descendants', () => {
     const documents = new Documents('project', { saveFile: vi.fn(), readFile: vi.fn() });
     const file = documents.add('chapters/intro.tex', content);

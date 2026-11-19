@@ -8,6 +8,14 @@ let version = '1';
 let mainPath = 'main.tex';
 const extraFiles = new Map<string, string>();
 const folders = new Set<string>();
+if (new URLSearchParams(location.search).has('editorui')) {
+  folders.add('chapters');
+  extraFiles.set(
+    'chapters/introduction.tex',
+    '\\section{Introduction}\nA searchable introduction.',
+  );
+  extraFiles.set('notes.tex', 'Searchable project notes.');
+}
 let imageCount = 0;
 let recent: { name: string; path: string }[] = [];
 let changes = [{ path: 'main.tex', originalPath: null, index: ' ', worktree: 'M' }];
@@ -93,6 +101,38 @@ mockIPC(
             : []),
         ];
       }
+      case 'search_project': {
+        const { query, caseSensitive, overlays } = args as {
+          query: string;
+          caseSensitive: boolean;
+          overlays: Record<string, string>;
+        };
+        const all = new Map([
+          ...extraFiles,
+          ...(mainPath ? [[mainPath, source] as [string, string]] : []),
+        ]);
+        return {
+          hits: [...all].flatMap(([path, text]) =>
+            (overlays[path] ?? text)
+              .split('\n')
+              .flatMap((text, i) =>
+                (
+                  caseSensitive
+                    ? text.includes(query)
+                    : text.toLowerCase().includes(query.toLowerCase())
+                )
+                  ? [{ path, line: i + 1, text }]
+                  : [],
+              ),
+          ),
+          limited: false,
+          skipped: 0,
+        };
+      }
+      case 'index_files':
+        return [...extraFiles.keys(), ...(mainPath ? [mainPath] : [])].filter(
+          (path) => !path.endsWith('.png'),
+        );
       case 'file_action': {
         const { action, path, destination } = args as {
           action: string;

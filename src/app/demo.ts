@@ -38,6 +38,20 @@ const files = new Map([
 ]);
 const folders = new Set<string>();
 export const demo: Backend = {
+  searchProject: async (_, query, sensitive, overlays) => ({
+    hits: [...files].flatMap(([path, text]) =>
+      (overlays[path] ?? text)
+        .split('\n')
+        .flatMap((text, i) =>
+          (sensitive ? text.includes(query) : text.toLowerCase().includes(query.toLowerCase()))
+            ? [{ path, line: i + 1, text }]
+            : [],
+        ),
+    ),
+    limited: false,
+    skipped: 0,
+  }),
+  indexFiles: async () => [...files.keys()],
   fileAction: async () => {
     throw new Error('File management requires the desktop app.');
   },

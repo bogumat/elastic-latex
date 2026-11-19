@@ -1,5 +1,10 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { Backend, Entry, FileAction } from '../../shared/contracts/backend';
+import type {
+  Backend,
+  Entry,
+  FileOperation,
+  FileBatchResult,
+} from '../../shared/contracts/backend';
 import { parentPath, useFileActions } from './FileActions';
 
 interface Row extends Entry {
@@ -12,16 +17,16 @@ export const FileTree = memo(function FileTree({
   active,
   onOpen,
   onError,
-  onAction,
+  onBatch,
   disabled = false,
 }: {
   api: Backend;
   projectId: string;
   projectPath?: string;
   active?: string;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, pin?: boolean) => void;
   onError: (message: string) => void;
-  onAction: (action: FileAction, path: string, destination?: string) => Promise<void>;
+  onBatch: (operations: FileOperation[]) => Promise<FileBatchResult>;
   disabled?: boolean;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
@@ -35,8 +40,10 @@ export const FileTree = memo(function FileTree({
   const submitting = useRef(false);
   const tree = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<Row>();
+  const [selectedPaths, setSelectedPaths] = useState(new Set<string>());
+  const anchor = useRef<string | undefined>(undefined);
   const [dropTarget, setDropTarget] = useState<string>();
-  const dragging = useRef<string | undefined>(undefined);
+  const dragging = useRef<string[] | undefined>(undefined);
   const epoch = useRef(0);
   async function refresh(reveal?: string) {
     const current = ++epoch.current;
@@ -62,6 +69,9 @@ export const FileTree = memo(function FileTree({
     }
     if (current !== epoch.current) return;
     setRows(next);
+    setSelectedPaths(
+      (previous) => new Set([...previous].filter((path) => next.some((row) => row.path === path))),
+    );
     setExpanded(opened);
     setSelected((previous) => next.find((entry) => entry.path === (reveal ?? previous?.path)));
     if (reveal) {
@@ -80,7 +90,8 @@ export const FileTree = memo(function FileTree({
     projectId,
     projectPath,
     disabled,
-    onAction,
+    onBatch,
+    selection: rows.filter((row) => selectedPaths.has(row.path)),
     onRefresh: refresh,
     onOpen: (path) => {
       const row = rows.find((entry) => entry.path === path);
@@ -91,7 +102,7 @@ export const FileTree = memo(function FileTree({
     onError,
   });
   function dragOver(event: React.DragEvent, folder: string) {
-    if (!dragging.current || disabled || actions.pending) return;
+    if (!dragging.current?.length || disabled || actions.pending) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
@@ -105,10 +116,14 @@ export const FileTree = memo(function FileTree({
     try {
       const data = JSON.parse(event.dataTransfer.getData('application/x-elastic-file')) as {
         projectId: string;
-        path: string;
+        paths: string[];
       };
-      if (data.projectId !== projectId || data.path !== dragging.current) return;
-      if (parentPath(data.path) !== folder) void actions.move(data.path, folder);
+      if (
+        data.projectId !== projectId ||
+        JSON.stringify(data.paths) !== JSON.stringify(dragging.current)
+      )
+        return;
+      void actions.move(data.paths, folder);
     } catch {
       /* External drags are not file imports. */
     }
@@ -149,30 +164,17 @@ export const FileTree = memo(function FileTree({
     } catch (reason) {
       onError(`Created ${name}, but could not refresh files: ${String(reason)}`);
     }
-    if (creating === 'file') onOpen(name);
+    if (creating === 'file') onOpen(name, true);
     setCreating(null);
     setPending(false);
     submitting.current = false;
   }
   useEffect(() => {
-    epoch.current++;
-    let current = true;
-    api
-      .listEntries(projectId, '')
-      .then((entries) => {
-        if (current) {
-          setRows(entries.map((entry) => ({ ...entry, depth: 0 })));
-          setExpanded(new Set());
-        }
-      })
-      .catch((error) => {
-        if (current) onError(String(error));
-      });
+    void refresh(active).catch((reason) => onError(String(reason)));
     return () => {
-      current = false;
       epoch.current++;
     };
-  }, [api, projectId, onError, revision]);
+  }, [api, projectId, onError, revision, active]);
   async function toggle(row: Row) {
     if (!row.directory) return onOpen(row.path);
     if (expanded.has(row.path)) {
@@ -314,7 +316,10 @@ export const FileTree = memo(function FileTree({
       <div
         className={`tree-root-drop ${dropTarget === '' ? 'drop-target' : ''}`}
         tabIndex={0}
-        onFocus={() => setSelected(undefined)}
+        onFocus={() => {
+          setSelected(undefined);
+          setSelectedPaths(new Set());
+        }}
         onContextMenu={(event) => actions.contextMenu(event)}
         onDragOver={(event) => dragOver(event, '')}
         onDrop={(event) => drop(event, '')}
@@ -333,24 +338,52 @@ export const FileTree = memo(function FileTree({
           {rows.slice(start, start + 60).map((row, index) => (
             <button
               key={row.path}
-              className={`tree-row ${selected?.path === row.path || active === row.path ? 'selected' : ''} ${actions.cutPath === row.path ? 'cut' : ''} ${dropTarget === row.path ? 'drop-target' : ''}`}
+              className={`tree-row ${selectedPaths.has(row.path) || (!selectedPaths.size && active === row.path) ? 'selected' : ''} ${actions.cutPaths?.includes(row.path) ? 'cut' : ''} ${dropTarget === row.path ? 'drop-target' : ''}`}
               style={{ top: (start + index) * 32, paddingLeft: 16 + row.depth * 16 }}
-              onClick={() => {
+              aria-selected={selectedPaths.has(row.path)}
+              onClick={(event) => {
                 setSelected(row);
-                if (!disabled && !actions.pending) void toggle(row);
+                if (event.shiftKey && anchor.current) {
+                  const first = rows.findIndex((item) => item.path === anchor.current),
+                    last = rows.indexOf(row);
+                  setSelectedPaths(
+                    new Set(
+                      rows
+                        .slice(Math.min(Math.max(0, first), last), Math.max(first, last) + 1)
+                        .map((item) => item.path),
+                    ),
+                  );
+                } else if (event.metaKey || event.ctrlKey) {
+                  setSelectedPaths((previous) => {
+                    const next = new Set(previous);
+                    if (next.has(row.path)) next.delete(row.path);
+                    else next.add(row.path);
+                    return next;
+                  });
+                  anchor.current = row.path;
+                } else {
+                  setSelectedPaths(new Set([row.path]));
+                  anchor.current = row.path;
+                  if (!disabled && !actions.pending) void toggle(row);
+                }
+              }}
+              onDoubleClick={() => {
+                if (!row.directory) onOpen(row.path, true);
               }}
               onFocus={() => setSelected(row)}
               onContextMenu={(event) => {
                 setSelected(row);
+                if (!selectedPaths.has(row.path)) setSelectedPaths(new Set([row.path]));
                 actions.contextMenu(event, row);
               }}
               draggable={!disabled && !pending && !actions.pending}
               onDragStart={(event) => {
-                dragging.current = row.path;
+                dragging.current = selectedPaths.has(row.path) ? [...selectedPaths] : [row.path];
+                setSelectedPaths(new Set(dragging.current));
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData(
                   'application/x-elastic-file',
-                  JSON.stringify({ projectId, path: row.path }),
+                  JSON.stringify({ projectId, paths: dragging.current }),
                 );
               }}
               onDragEnd={() => {

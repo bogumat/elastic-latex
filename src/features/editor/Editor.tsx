@@ -4,6 +4,7 @@ import { Compartment, EditorState, StateEffect } from '@codemirror/state';
 import type { Document, Documents } from './documents';
 import { measure } from '../../performance/probes';
 import { clipboardTable } from './paste/tables';
+import { sourceLocation, type SourceLocation } from './outline';
 
 export const Editor = memo(function Editor({
   documents,
@@ -13,6 +14,7 @@ export const Editor = memo(function Editor({
   readOnly = false,
   onPasteImage,
   onError,
+  onLocation,
 }: {
   documents: Documents;
   file: Document;
@@ -21,14 +23,16 @@ export const Editor = memo(function Editor({
   readOnly?: boolean;
   onPasteImage: (image: Blob) => Promise<string>;
   onError: (message: string) => void;
+  onLocation: (location: SourceLocation) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const active = useRef(file);
   const editable = useRef(new Compartment());
-  const callbacks = useRef({ onPasteImage, onError });
-  callbacks.current = { onPasteImage, onError };
+  const callbacks = useRef({ onPasteImage, onError, onLocation });
+  callbacks.current = { onPasteImage, onError, onLocation };
   const plainPaste = useRef(0);
+  const locationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     const editor = new EditorView({
       parent: host.current!,
@@ -37,6 +41,13 @@ export const Editor = memo(function Editor({
         measure('editor-transaction', () => {
           editor.update([transaction]);
           documents.update(active.current, transaction);
+          if (transaction.docChanged || transaction.selection) {
+            clearTimeout(locationTimer.current);
+            locationTimer.current = setTimeout(
+              () => callbacks.current.onLocation(sourceLocation(editor.state)),
+              120,
+            );
+          }
         });
       },
     });
@@ -44,6 +55,7 @@ export const Editor = memo(function Editor({
     view.current = editor;
     performance.mark('elastic:editor-ready');
     return () => {
+      clearTimeout(locationTimer.current);
       active.current.scrollTop = editor.scrollDOM.scrollTop;
       editor.destroy();
       view.current = null;
@@ -51,6 +63,7 @@ export const Editor = memo(function Editor({
   }, [documents]);
   useEffect(() => {
     const editor = view.current!;
+    clearTimeout(locationTimer.current);
     if (active.current !== file) {
       active.current.scrollTop = editor.scrollDOM.scrollTop;
       active.current = file;
@@ -65,6 +78,7 @@ export const Editor = memo(function Editor({
       });
     }
     editor.focus();
+    callbacks.current.onLocation(sourceLocation(editor.state));
     return documents.bindEditor(file, (spec) => editor.dispatch(spec));
   }, [documents, file, line, navigation]);
   useEffect(() => {

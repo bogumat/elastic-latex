@@ -4,6 +4,7 @@ mod file_actions;
 mod git;
 mod images;
 mod persistence;
+mod project_index;
 mod projects;
 mod synctex;
 
@@ -121,6 +122,24 @@ async fn reload_files(
         Ok(files)
     })
     .await
+}
+
+#[tauri::command]
+async fn search_project(
+    project_id: String,
+    query: String,
+    case_sensitive: bool,
+    overlays: std::collections::HashMap<String, String>,
+    state: State<'_, AppState>,
+) -> Result<project_index::SearchResults> {
+    let project = state.project(&project_id)?;
+    blocking(move || project_index::search(&project, &query, case_sensitive, overlays)).await
+}
+
+#[tauri::command]
+async fn index_files(project_id: String, state: State<'_, AppState>) -> Result<Vec<String>> {
+    let project = state.project(&project_id)?;
+    blocking(move || project_index::files(&project)).await
 }
 
 #[tauri::command]
@@ -348,6 +367,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_project,
             list_entries,
+            index_files,
+            search_project,
             create_entry,
             commands::files::file_action,
             save_image,

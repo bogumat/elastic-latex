@@ -34,6 +34,13 @@ export interface BuildResult {
   elapsedMs: number;
 }
 export interface Backend {
+  searchProject(
+    projectId: string,
+    query: string,
+    caseSensitive: boolean,
+    overlays: Record<string, string>,
+  ): Promise<SearchResults>;
+  indexFiles(projectId: string): Promise<string[]>;
   fileAction(
     projectId: string,
     action: FileAction,
@@ -61,8 +68,25 @@ export interface Backend {
   reloadFiles(projectId: string, paths: string[]): Promise<Record<string, FileData | null>>;
 }
 export const desktop = isTauri();
+export interface SearchResults {
+  hits: { path: string; line: number; text: string }[];
+  limited: boolean;
+  skipped: number;
+}
+export interface FileOperation {
+  action: FileAction;
+  path: string;
+  destination?: string;
+}
+export interface FileBatchResult {
+  completed: FileOperation[];
+  errors: string[];
+}
 export type FileAction = 'move' | 'copy' | 'trash' | 'reveal' | 'copy-path' | 'copy-relative-path';
 export const backend: Backend = {
+  searchProject: (projectId, query, caseSensitive, overlays) =>
+    invoke('search_project', { projectId, query, caseSensitive, overlays }),
+  indexFiles: (projectId) => invoke('index_files', { projectId }),
   fileAction: (projectId, action, path, destination) =>
     invoke('file_action', { projectId, action, path, destination }),
   openProject: (path) => invoke('open_project', { path }),

@@ -26,7 +26,7 @@ test('source mode and keyboard pane resizing work at laptop sizes', async ({ pag
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');
   await expect(page.locator('.cm-content')).toBeVisible();
-  const divider = page.getByRole('separator');
+  const divider = page.getByRole('separator', { name: 'Source and PDF divider' });
   await divider.focus();
   await page.keyboard.press('ArrowLeft');
   await expect(divider).toHaveAttribute('aria-valuenow', '48');

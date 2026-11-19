@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { topPaths } from './selection';
 import { createPortal } from 'react-dom';
-import type { Backend, Entry, FileAction } from '../../shared/contracts/backend';
+import type {
+  Backend,
+  Entry,
+  FileAction,
+  FileOperation,
+  FileBatchResult,
+} from '../../shared/contracts/backend';
 
 export const parentPath = (path: string) => path.split('/').slice(0, -1).join('/');
 const join = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
@@ -10,7 +17,8 @@ export function useFileActions({
   projectId,
   projectPath,
   disabled,
-  onAction,
+  onBatch,
+  selection,
   onRefresh,
   onOpen,
   onCreate,
@@ -20,14 +28,15 @@ export function useFileActions({
   projectId: string;
   projectPath?: string;
   disabled: boolean;
-  onAction: (action: FileAction, path: string, destination?: string) => Promise<void>;
+  onBatch: (operations: FileOperation[]) => Promise<FileBatchResult>;
+  selection: Entry[];
   onRefresh: (reveal?: string) => Promise<void>;
   onOpen: (path: string) => void;
   onCreate: (kind: 'file' | 'folder', folder: string) => void;
   onError: (message: string) => void;
 }) {
-  const [clipboard, setClipboard] = useState<{ path: string; cut: boolean }>();
-  const [menu, setMenu] = useState<{ row?: Entry; x: number; y: number }>();
+  const [clipboard, setClipboard] = useState<{ paths: string[]; cut: boolean }>();
+  const [menu, setMenu] = useState<{ row?: Entry; targets: Entry[]; x: number; y: number }>();
   const [renaming, setRenaming] = useState<Entry>();
   const [name, setName] = useState('');
   const [renameError, setRenameError] = useState('');
@@ -54,22 +63,31 @@ export function useFileActions({
       window.removeEventListener('resize', scroll);
     };
   }, [menu]);
-  async function perform(action: FileAction, path: string, destination = '') {
-    if (blocked || lock.current) return;
+  async function performMany(operations: FileOperation[]) {
+    if (blocked || lock.current) return false;
     lock.current = true;
     setPending(true);
     try {
-      await onAction(action, path, destination);
-      if (action === 'move' || action === 'trash')
-        setClipboard((previous) => {
-          if (!previous || (previous.path !== path && !previous.path.startsWith(`${path}/`)))
-            return previous;
-          return action === 'trash'
-            ? undefined
-            : { ...previous, path: destination + previous.path.slice(path.length) };
-        });
-      if (action === 'move' || action === 'copy' || action === 'trash')
-        await onRefresh(destination || undefined);
+      const result = await onBatch(operations);
+      for (const { action, path, destination = '' } of result.completed) {
+        if (action === 'move' || action === 'trash')
+          setClipboard((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  paths: previous.paths.flatMap((value) => {
+                    if (value !== path && !value.startsWith(`${path}/`)) return [value];
+                    return action === 'trash' ? [] : [destination + value.slice(path.length)];
+                  }),
+                }
+              : undefined,
+          );
+      }
+      const changed = result.completed.filter((item) =>
+        ['move', 'copy', 'trash'].includes(item.action),
+      );
+      if (changed.length) await onRefresh(changed.at(-1)?.destination);
+      if (result.errors.length) throw new Error(result.errors.join('\n'));
       return true;
     } catch (reason) {
       if (renaming) setRenameError(String(reason));
@@ -80,9 +98,13 @@ export function useFileActions({
       setPending(false);
     }
   }
-  async function availableName(path: string, folder: string) {
+  const perform = (action: FileAction, path: string, destination = '') =>
+    performMany([{ action, path, destination }]);
+  async function availableName(path: string, folder: string, reserved = new Set<string>()) {
     const entries = await api.listEntries(projectId, folder);
     const names = new Set(entries.map((entry) => entry.name.toLocaleLowerCase()));
+    for (const value of reserved)
+      if (parentPath(value) === folder) names.add(value.split('/').pop()!.toLocaleLowerCase());
     const original = path.split('/').pop()!;
     if (!names.has(original.toLocaleLowerCase())) return join(folder, original);
     const source = await api.listEntries(projectId, parentPath(path));
@@ -100,16 +122,33 @@ export function useFileActions({
   async function paste(folder: string) {
     if (!clipboard || blocked) return;
     try {
-      if (clipboard.cut && parentPath(clipboard.path) === folder) {
-        setClipboard(undefined);
-        return;
+      const operations: FileOperation[] = [],
+        reserved = new Set<string>();
+      for (const path of topPaths(clipboard.paths)) {
+        if (clipboard.cut && parentPath(path) === folder) continue;
+        const destination = clipboard.cut
+          ? join(folder, path.split('/').pop()!)
+          : await availableName(path, folder, reserved);
+        reserved.add(destination);
+        operations.push({ action: clipboard.cut ? 'move' : 'copy', path, destination });
       }
-      const destination = clipboard.cut
-        ? join(folder, clipboard.path.split('/').pop()!)
-        : await availableName(clipboard.path, folder);
-      if (await perform(clipboard.cut ? 'move' : 'copy', clipboard.path, destination)) {
+      if (await performMany(operations)) {
         if (clipboard.cut) setClipboard(undefined);
       }
+    } catch (reason) {
+      onError(String(reason));
+    }
+  }
+  async function duplicateMany(paths: string[]) {
+    try {
+      const operations: FileOperation[] = [];
+      for (const path of topPaths(paths))
+        operations.push({
+          action: 'copy',
+          path,
+          destination: await availableName(path, parentPath(path)),
+        });
+      await performMany(operations);
     } catch (reason) {
       onError(String(reason));
     }
@@ -119,27 +158,28 @@ export function useFileActions({
     setRenaming(row);
     setName(row.name);
   }
-  async function duplicate(row: Entry) {
-    try {
-      await perform('copy', row.path, await availableName(row.path, parentPath(row.path)));
-    } catch (reason) {
-      onError(String(reason));
-    }
-  }
   function keyDown(event: KeyboardEvent, row?: Entry) {
     if ((event.target as HTMLElement).closest('input, textarea') || blocked) return;
     const modifier = event.metaKey || event.ctrlKey;
     const folder = row?.directory ? row.path : parentPath(row?.path ?? '');
+    const targets = row
+      ? topPaths(selection.length ? selection.map((item) => item.path) : [row.path])
+      : [];
     let handled = true;
     if (modifier && event.key.toLowerCase() === 'c' && row)
-      setClipboard({ path: row.path, cut: false });
+      setClipboard({ paths: targets, cut: false });
     else if (modifier && event.key.toLowerCase() === 'x' && row)
-      setClipboard({ path: row.path, cut: true });
+      setClipboard({ paths: targets, cut: true });
     else if (modifier && event.key.toLowerCase() === 'v') void paste(folder);
-    else if (modifier && event.key.toLowerCase() === 'd' && row) void duplicate(row);
-    else if ((event.key === 'F2' || (!modifier && event.key === 'Enter')) && row) rename(row);
+    else if (modifier && event.key.toLowerCase() === 'd' && row) void duplicateMany(targets);
+    else if (
+      (event.key === 'F2' || (!modifier && event.key === 'Enter')) &&
+      row &&
+      targets.length === 1
+    )
+      rename(row);
     else if ((event.key === 'Delete' || (event.metaKey && event.key === 'Backspace')) && row)
-      void perform('trash', row.path);
+      void performMany(targets.map((path) => ({ action: 'trash', path })));
     else handled = false;
     if (handled) {
       event.preventDefault();
@@ -153,11 +193,13 @@ export function useFileActions({
     lastTarget.current = event.currentTarget as HTMLElement;
     setMenu({
       row,
+      targets: row ? (selection.some((item) => item.path === row.path) ? selection : [row]) : [],
       x: Math.max(4, Math.min(event.clientX, window.innerWidth - 230)),
       y: Math.max(4, Math.min(event.clientY, window.innerHeight - 410)),
     });
   }
   const row = menu?.row;
+  const targets = topPaths((menu?.targets ?? []).map((item) => item.path));
   const folder = row?.directory ? row.path : parentPath(row?.path ?? '');
   const item = (label: string, action: () => void, unavailable = false) => (
     <button
@@ -200,21 +242,36 @@ export function useFileActions({
               }
             }}
           >
-            {row && item('Open', () => onOpen(row.path))}
-            {item('Reveal in Finder', () => void perform('reveal', row?.path ?? ''))}
+            {row && item('Open', () => onOpen(row.path), targets.length !== 1)}
+            {item(
+              'Reveal in Finder',
+              () => void perform('reveal', row?.path ?? ''),
+              targets.length > 1,
+            )}
             <hr />
             {item('New File…', () => onCreate('file', folder))}
             {item('New Folder…', () => onCreate('folder', folder))}
             <hr />
-            {row && item('Cut', () => setClipboard({ path: row.path, cut: true }))}
-            {row && item('Copy', () => setClipboard({ path: row.path, cut: false }))}
+            {row && item('Cut', () => setClipboard({ paths: targets, cut: true }))}
+            {row && item('Copy', () => setClipboard({ paths: targets, cut: false }))}
             {item('Paste', () => void paste(folder), !clipboard)}
-            {row && item('Duplicate', () => void duplicate(row))}
-            {row && item('Rename…', () => rename(row))}
-            {row && item('Copy Relative Path', () => void perform('copy-relative-path', row.path))}
-            {row && projectPath && item('Copy Path', () => void perform('copy-path', row.path))}
+            {row && item('Duplicate', () => void duplicateMany(targets))}
+            {row && item('Rename…', () => rename(row), targets.length !== 1)}
+            {row &&
+              item(
+                'Copy Relative Path',
+                () => void perform('copy-relative-path', row.path),
+                targets.length !== 1,
+              )}
+            {row &&
+              projectPath &&
+              item('Copy Path', () => void perform('copy-path', row.path), targets.length !== 1)}
             {row && <hr />}
-            {row && item('Move to Trash', () => void perform('trash', row.path))}
+            {row &&
+              item(
+                'Move to Trash',
+                () => void performMany(targets.map((path) => ({ action: 'trash', path }))),
+              )}
           </div>,
           document.body,
         )}
@@ -280,8 +337,16 @@ export function useFileActions({
     keyDown,
     overlay,
     pending,
-    cutPath: clipboard?.cut ? clipboard.path : undefined,
-    move: (source: string, target: string) =>
-      perform('move', source, join(target, source.split('/').pop()!)),
+    cutPaths: clipboard?.cut ? clipboard.paths : [],
+    move: (sources: string[], target: string) =>
+      performMany(
+        topPaths(sources)
+          .filter((path) => parentPath(path) !== target)
+          .map((path) => ({
+            action: 'move',
+            path,
+            destination: join(target, path.split('/').pop()!),
+          })),
+      ),
   };
 }

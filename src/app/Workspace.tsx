@@ -14,15 +14,25 @@ import {
   type BuildResult,
   type Project,
   type Toolchain,
-  type FileAction,
+  type FileOperation,
+  type FileBatchResult,
 } from '../shared/contracts/backend';
 import type { Documents, Document } from '../features/editor/documents';
 import { Editor } from '../features/editor/Editor';
+import { EditorTabs } from '../features/editor/EditorTabs';
 import { FileTree } from '../features/projects/FileTree';
+import { Sidebar } from '../features/projects/Sidebar';
+import { Breadcrumbs } from '../features/projects/Breadcrumbs';
+import type { SourceLocation } from '../features/editor/outline';
 import type { Artifact } from '../features/preview/Preview';
 const Preview = lazy(() => import('../features/preview/Preview'));
+const Settings = lazy(() => import('../features/settings/Settings'));
+const ProjectSearch = lazy(() => import('../features/projects/ProjectSearch'));
+const QuickOpen = lazy(() => import('../features/projects/QuickOpen'));
 const GitPanel = lazy(() => import('../features/git/GitPanel'));
 import type { GitAction } from '../features/git/api';
+import { loadSettings, darkTheme } from '../features/settings/preferences';
+import { literalChanges } from '../features/projects/replace';
 import { pasteImage } from '../features/editor/paste/images';
 
 interface WorkspaceProps {
@@ -54,7 +64,40 @@ export default function Workspace({
   const [root, setRoot] = useState(initialRoot);
   const [line, setLine] = useState<number>();
   const [navigation, setNavigation] = useState(0);
+  const [location, setLocation] = useState<SourceLocation>({ line: 1 });
+  const updateLocation = useCallback(
+    (next: SourceLocation) =>
+      setLocation((previous) =>
+        previous.line === next.line &&
+        previous.section?.title === next.section?.title &&
+        previous.section?.line === next.section?.line
+          ? previous
+          : next,
+      ),
+    [],
+  );
   const [building, setBuilding] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState(loadSettings);
+  const [systemTheme, setSystemTheme] = useState(0);
+  useEffect(() => {
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setSystemTheme((value) => value + 1);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkTheme(settings) ? 'dark' : 'light';
+    documents.configure(settings);
+    try {
+      localStorage.setItem('elastic.settings', JSON.stringify(settings));
+    } catch {
+      onError('Settings could not be persisted. They still apply to this session.');
+    }
+  }, [documents, settings, systemTheme, onError]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
   const [gitBusy, setGitBusy] = useState<GitAction | null>(null);
   const [fileBusy, setFileBusy] = useState(false);
@@ -62,6 +105,7 @@ export default function Workspace({
   const [reloadFailed, setReloadFailed] = useState(false);
   const busy = useRef(false);
   const pendingCompile = useRef(false);
+  const openSequence = useRef(0);
   const [result, setResult] = useState<BuildResult>();
   const [artifact, setArtifact] = useState<Artifact>();
   const [builtRevision, setBuiltRevision] = useState('');
@@ -92,15 +136,19 @@ export default function Workspace({
     };
   }, [control, saveAll]);
   const openFile = useCallback(
-    (path: string, targetLine?: number) => {
+    (path: string, targetLine?: number, preview = false) => {
+      const request = ++openSequence.current;
       void documents
-        .open(path)
+        .open(path, preview)
         .then(() => {
+          if (request !== openSequence.current) return;
           setActive(path);
           setLine(targetLine);
           setNavigation((value) => value + 1);
         })
-        .catch((reason) => onError(String(reason)));
+        .catch((reason) => {
+          if (request === openSequence.current) onError(String(reason));
+        });
     },
     [documents, onError],
   );
@@ -155,34 +203,46 @@ export default function Workspace({
       void compile();
     }
   }, [building, gitBusy, fileBusy, compile]);
-  const runFileAction = useCallback(
-    async (action: FileAction, path: string, destination = '') => {
+  const runFileBatch = useCallback(
+    async (operations: FileOperation[]): Promise<FileBatchResult> => {
       if (busy.current || reloadFailed)
         throw new Error('Finish the active operation before changing files.');
       busy.current = true;
       setFileBusy(true);
       documents.holdAutosave(true);
+      const completed: FileOperation[] = [],
+        errors: string[] = [];
       try {
         await documents.saveAll();
-        await api.fileAction(project.id, action, path, destination);
-        if (action === 'move' || action === 'trash') {
-          const target = action === 'trash' ? null : destination;
-          const remap = (value: string) =>
-            value === path || value.startsWith(`${path}/`)
-              ? target === null
-                ? ''
-                : target + value.slice(path.length)
-              : value;
-          documents.relocate(path, target);
-          setRoot(remap);
-          setActive((value) => (value ? remap(value) || undefined : undefined));
-          setNavigation((value) => value + 1);
+        for (const operation of operations) {
+          const { action, path, destination = '' } = operation;
+          try {
+            await api.fileAction(project.id, action, path, destination);
+          } catch (reason) {
+            errors.push(`${path}: ${String(reason)}`);
+            continue;
+          }
+          completed.push(operation);
+          if (action === 'move' || action === 'trash') {
+            const target = action === 'trash' ? null : destination;
+            const remap = (value: string) =>
+              value === path || value.startsWith(`${path}/`)
+                ? target === null
+                  ? ''
+                  : target + value.slice(path.length)
+                : value;
+            documents.relocate(path, target);
+            setRoot(remap);
+            setActive((value) => (value ? remap(value) || undefined : undefined));
+            setNavigation((value) => value + 1);
+          }
+          if (action === 'move' || action === 'copy' || action === 'trash') {
+            setArtifact(undefined);
+            setResult(undefined);
+            setBuiltRevision('');
+          }
         }
-        if (action === 'move' || action === 'copy' || action === 'trash') {
-          setArtifact(undefined);
-          setResult(undefined);
-          setBuiltRevision('');
-        }
+        return { completed, errors };
       } finally {
         documents.holdAutosave(false);
         busy.current = false;
@@ -191,6 +251,40 @@ export default function Workspace({
     },
     [api, documents, project.id, reloadFailed],
   );
+  async function replaceProject(
+    paths: string[],
+    query: string,
+    replacement: string,
+    sensitive: boolean,
+  ) {
+    if (busy.current || reloadFailed)
+      throw new Error('Finish the active operation before replacing text.');
+    busy.current = true;
+    setFileBusy(true);
+    documents.holdAutosave(true);
+    try {
+      const plans = [];
+      for (const path of paths) {
+        const file = await documents.open(path);
+        plans.push({
+          file,
+          changes: literalChanges(file.state.sliceDoc(), query, replacement, sensitive),
+        });
+      }
+      let count = 0;
+      for (const { file, changes } of plans)
+        if (changes.length) {
+          count += changes.length;
+          documents.edit(file, { changes, userEvent: 'input.replace.all' });
+        }
+      await documents.saveAll();
+      return count;
+    } finally {
+      documents.holdAutosave(false);
+      busy.current = false;
+      setFileBusy(false);
+    }
+  }
   const refreshBuffers = useCallback(async () => {
     try {
       await documents.reloadSaved((paths) => api.reloadFiles(project.id, paths));
@@ -239,6 +333,26 @@ export default function Workspace({
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
       if (!event.metaKey && !event.ctrlKey) return;
+      if (event.key === ',') {
+        event.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        setSidebarHidden((value) => !value);
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && event.shiftKey) {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if (event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        setQuickOpen(true);
+        return;
+      }
       if (event.key.toLowerCase() === 's') {
         event.preventDefault();
         if (!event.repeat) void compile();
@@ -302,6 +416,9 @@ export default function Workspace({
           >
             Git
           </button>
+          <button aria-label="Settings" title="Settings (⌘,)" onClick={() => setSettingsOpen(true)}>
+            ⚙
+          </button>
           <button
             className="close-folder"
             onClick={() => void onCloseFolder()}
@@ -322,11 +439,12 @@ export default function Workspace({
               <option value="" disabled>
                 Select a root
               </option>
-              {files
-                .filter((file) => file.path.endsWith('.tex'))
-                .map((file) => (
-                  <option key={file.path} value={file.path}>
-                    {file.path}
+              {[...new Set([root, ...files.map((file) => file.path)])]
+                .filter(Boolean)
+                .filter((path) => path.endsWith('.tex'))
+                .map((path) => (
+                  <option key={path} value={path}>
+                    {path}
                   </option>
                 ))}
             </select>
@@ -362,33 +480,55 @@ export default function Workspace({
         </div>
       )}
       <div className="workspace">
-        {!gitOpen && (
-          <FileTree
-            key={`${project.id}:${treeVersion}`}
-            api={api}
-            projectId={project.id}
-            projectPath={project.path}
-            active={file?.path}
-            onOpen={openFile}
-            onError={onError}
-            onAction={runFileAction}
-            disabled={building || !!gitBusy || fileBusy || reloadFailed}
-          />
-        )}
-        {gitOpen && (
-          <Suspense fallback={<aside className="git-panel">Loading source control…</aside>}>
-            <GitPanel
+        <Sidebar hidden={sidebarHidden}>
+          {!gitOpen && (
+            <FileTree
+              key={`${project.id}:${treeVersion}`}
+              api={api}
               projectId={project.id}
-              busy={gitBusy}
-              blocked={building || fileBusy || reloadFailed}
-              onAction={runGit}
-              onClose={() => setGitOpen(false)}
+              projectPath={project.path}
+              active={file?.path}
+              onOpen={(path, pin) => openFile(path, undefined, !pin)}
+              onError={onError}
+              onBatch={runFileBatch}
+              disabled={building || !!gitBusy || fileBusy || reloadFailed}
             />
-          </Suspense>
-        )}
+          )}
+          {gitOpen && (
+            <Suspense fallback={<aside className="git-panel">Loading source control…</aside>}>
+              <GitPanel
+                projectId={project.id}
+                busy={gitBusy}
+                blocked={building || fileBusy || reloadFailed}
+                onAction={runGit}
+                onClose={() => setGitOpen(false)}
+              />
+            </Suspense>
+          )}
+        </Sidebar>
         <div className="workspace-main">
           <div className="workspace-toolbar">
-            <span className="muted small">{file?.path ?? 'Select a source file'}</span>
+            <button
+              aria-label="Toggle sidebar"
+              aria-pressed={!sidebarHidden}
+              title="Toggle sidebar (⌘B)"
+              onClick={() => setSidebarHidden((value) => !value)}
+            >
+              ☰
+            </button>
+            <Breadcrumbs
+              api={api}
+              project={project}
+              path={file?.path}
+              location={location}
+              onOpen={openFile}
+            />
+            <button onClick={() => setSearchOpen(true)} title="Search project (⌘⇧F)">
+              Search
+            </button>
+            <button onClick={() => setQuickOpen(true)} title="Quick Open (⌘P)">
+              Quick Open
+            </button>
             <div className="view-switch" aria-label="Workspace view">
               {(['source', 'split', 'pdf'] as const).map((view) => (
                 <button key={view} aria-pressed={mode === view} onClick={() => setMode(view)}>
@@ -399,22 +539,17 @@ export default function Workspace({
           </div>
           <div className={`panes mode-${mode}`}>
             <section className="source-pane" aria-label="Source">
-              <div className="tabs" role="tablist">
-                {files.map((tab) => (
-                  <button
-                    key={tab.path}
-                    role="tab"
-                    aria-selected={file === tab}
-                    onClick={() => {
-                      setActive(tab.path);
-                      setLine(undefined);
-                    }}
-                  >
-                    {tab.path.split('/').pop()}
-                    {tab.revision !== tab.savedRevision && <span aria-label="unsaved"> •</span>}
-                  </button>
-                ))}
-              </div>
+              <EditorTabs
+                documents={documents}
+                active={file}
+                disabled={building || !!gitBusy || fileBusy || reloadFailed}
+                onSelect={(path) => {
+                  setActive(path || undefined);
+                  setLine(undefined);
+                  setNavigation((value) => value + 1);
+                }}
+                onError={onError}
+              />
               {file ? (
                 <Editor
                   documents={documents}
@@ -424,6 +559,7 @@ export default function Workspace({
                   readOnly={gitBusy === 'pull' || fileBusy || reloadFailed}
                   onPasteImage={importImage}
                   onError={onError}
+                  onLocation={updateLocation}
                 />
               ) : (
                 <div className="empty-state">
@@ -521,6 +657,33 @@ export default function Workspace({
           </div>
         </div>
       </div>
+      <Suspense fallback={null}>
+        {settingsOpen && (
+          <Settings
+            value={settings}
+            onChange={setSettings}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+        {searchOpen && (
+          <ProjectSearch
+            api={api}
+            documents={documents}
+            blocked={building || !!gitBusy || fileBusy || reloadFailed}
+            onOpen={openFile}
+            onReplace={replaceProject}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
+        {quickOpen && (
+          <QuickOpen
+            api={api}
+            projectId={project.id}
+            onOpen={openFile}
+            onClose={() => setQuickOpen(false)}
+          />
+        )}
+      </Suspense>
       <footer className="status-bar">
         <SaveIndicator file={file} building={building || !!gitBusy} />
         <span>{freshness}</span>

@@ -9,3 +9,14 @@
   --error: #a33a3a;
   color-scheme: light;
 }
+:root[data-theme='dark'] {
+  --background: #1c2430;
+  --surface: #111923;
+  --border: #354357;
+  --text: #e1e9f3;
+  --secondary: #a6b5c8;
+  --accent: #7a9fc5;
+  --selection: #30465d;
+  --error: #ff9f99;
+  color-scheme: dark;
+}

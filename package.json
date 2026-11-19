@@ -27,7 +27,8 @@
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "pdfjs-dist": "^5.4.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@lezer/highlight": "^1.2.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

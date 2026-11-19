@@ -1,9 +1,17 @@
-import { EditorState, type Transaction, type TransactionSpec } from '@codemirror/state';
+import {
+  Compartment,
+  EditorState,
+  type Transaction,
+  type TransactionSpec,
+} from '@codemirror/state';
 import type { Backend, FileData } from '../../shared/contracts/backend';
-import { editorExtensions } from './extensions';
+import { editorExtensions, settingsExtensions } from './extensions';
+import { loadSettings, type EditorSettings } from '../settings/preferences';
 
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
 export interface Document {
+  preview?: boolean;
+  preferences: Compartment;
   path: string;
   state: EditorState;
   version: string;
@@ -26,6 +34,8 @@ export class Documents {
   private disposed = false;
   private opening = new Map<string, Promise<Document>>();
   private editRevision = 0;
+  private previewSequence = 0;
+  private settings = loadSettings();
   private editor?: { file: Document; dispatch: (spec: TransactionSpec) => void };
   private pastes = new Map<Promise<void>, { file: Document; from: number; to: number }>();
   bindEditor(file: Document, dispatch: (spec: TransactionSpec) => void) {
@@ -78,24 +88,50 @@ export class Documents {
       this.emit();
     }
   }
-  async open(path: string): Promise<Document> {
+  async open(path: string, preview = false): Promise<Document> {
     const existing = this.files.get(path);
-    if (existing) return existing;
+    if (existing) {
+      if (preview) this.previewSequence++;
+      if (!preview) this.pin(existing);
+      return existing;
+    }
     const pending = this.opening.get(path);
-    if (pending) return pending;
+    if (pending)
+      return pending.then((file) => {
+        if (!preview) this.pin(file);
+        return file;
+      });
+    const previewRequest = preview ? ++this.previewSequence : 0;
     const load = this.api
       .readFile(this.projectId, path)
-      .then((data) => this.add(path, data))
+      .then((data) => {
+        if (preview && previewRequest !== this.previewSequence)
+          throw new Error('Preview superseded by a newer file selection.');
+        if (preview)
+          for (const file of [...this.files.values()]) {
+            if (file.preview && file.revision === file.savedRevision && !file.saving)
+              this.remove(file);
+          }
+        const file = this.add(path, data);
+        file.preview = preview;
+        return file;
+      })
       .finally(() => this.opening.delete(path));
     this.opening.set(path, load);
     return load;
   }
   add(path: string, data: FileData): Document {
+    const preferences = new Compartment();
     const file: Document = {
       path,
+      preferences,
       state: EditorState.create({
         doc: data.text,
-        extensions: [editorExtensions, EditorState.lineSeparator.of(data.lineEnding)],
+        extensions: [
+          editorExtensions,
+          preferences.of(settingsExtensions(this.settings)),
+          EditorState.lineSeparator.of(data.lineEnding),
+        ],
       }),
       version: data.version,
       revision: 0,
@@ -115,13 +151,14 @@ export class Documents {
     }
     file.state = transaction.state;
     if (!transaction.docChanged) return;
+    file.preview = false;
     file.revision++;
     this.editRevision++;
     this.status(file, 'unsaved');
     this.schedule(file);
   }
   private schedule(file: Document) {
-    if (this.held || this.disposed) return;
+    if (this.held || this.disposed || !this.settings.autosave) return;
     clearTimeout(file.timer);
     const save = () => {
       void this.save(file).catch(() => {
@@ -191,11 +228,54 @@ export class Documents {
       if (!held && file.revision !== file.savedRevision) this.schedule(file);
     }
   }
+  configure(settings: EditorSettings) {
+    this.settings = settings;
+    for (const file of this.files.values()) {
+      clearTimeout(file.timer);
+      clearTimeout(file.deadline);
+      file.deadline = undefined;
+      this.edit(file, { effects: file.preferences.reconfigure(settingsExtensions(settings)) });
+      if (file.revision !== file.savedRevision) this.schedule(file);
+    }
+    this.emit();
+  }
   get dirty() {
     return [...this.files.values()].some((file) => file.revision !== file.savedRevision);
   }
   revisions() {
     return String(this.editRevision);
+  }
+  pin(file: Document) {
+    if (file.preview) {
+      file.preview = false;
+      this.emit();
+    }
+  }
+  private remove(file: Document) {
+    clearTimeout(file.timer);
+    clearTimeout(file.deadline);
+    this.files.delete(file.path);
+    this.emit();
+  }
+  async close(path: string) {
+    while (this.pastes.size) await Promise.all(this.pastes.keys());
+    const file = this.files.get(path);
+    if (!file) return;
+    await this.save(file);
+    if (file.revision !== file.savedRevision)
+      throw new Error('The file changed while closing. Your edits are retained.');
+    this.remove(file);
+  }
+  reorder(from: string, to: string) {
+    const files = [...this.files.values()];
+    const source = files.findIndex((file) => file.path === from),
+      target = files.findIndex((file) => file.path === to);
+    if (source < 0 || target < 0 || source === target) return;
+    const [file] = files.splice(source, 1);
+    files.splice(target, 0, file);
+    this.files.clear();
+    files.forEach((file) => this.files.set(file.path, file));
+    this.emit();
   }
   relocate(from: string, to: string | null) {
     for (const [path, file] of [...this.files]) {
