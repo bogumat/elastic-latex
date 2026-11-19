@@ -17,11 +17,13 @@ export default function Preview({
   artifact,
   active,
   onSource,
+  defaultZoom = 0,
 }: {
   api: Backend;
   artifact: Artifact;
   active: boolean;
   onSource: (path: string, line: number) => void;
+  defaultZoom?: number;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [loaded, setDocument] = useState<{ pdf: PDFDocumentProxy; sizes: PageSize[] }>();
@@ -29,7 +31,8 @@ export default function Preview({
   const queue = useRef(new RenderQueue());
   const [range, setRange] = useState({ first: 0, last: 0 });
   const [page, setPage] = useState(1);
-  const [zoom, setZoom] = useState(0);
+  const [zoom, setZoom] = useState(defaultZoom);
+  useEffect(() => setZoom(defaultZoom), [defaultZoom]);
   const [width, setWidth] = useState(500);
   const [visible, setVisible] = useState(!document.hidden);
   const [loading, setLoading] = useState(true);

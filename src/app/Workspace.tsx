@@ -26,12 +26,11 @@ import { Breadcrumbs } from '../features/projects/Breadcrumbs';
 import type { SourceLocation } from '../features/editor/outline';
 import type { Artifact } from '../features/preview/Preview';
 const Preview = lazy(() => import('../features/preview/Preview'));
-const Settings = lazy(() => import('../features/settings/Settings'));
 const ProjectSearch = lazy(() => import('../features/projects/ProjectSearch'));
 const QuickOpen = lazy(() => import('../features/projects/QuickOpen'));
 const GitPanel = lazy(() => import('../features/git/GitPanel'));
 import type { GitAction } from '../features/git/api';
-import { loadSettings, darkTheme } from '../features/settings/preferences';
+import { darkTheme, type EditorSettings } from '../features/settings/preferences';
 import { literalChanges } from '../features/projects/replace';
 import { pasteImage } from '../features/editor/paste/images';
 
@@ -45,6 +44,8 @@ interface WorkspaceProps {
   onClone: () => Promise<void>;
   onCloseFolder: () => Promise<void>;
   onError: (message: string) => void;
+  settings: EditorSettings;
+  onSettings: () => void;
   control: React.RefObject<{ save: () => Promise<void>; busy: () => boolean } | null>;
 }
 export default function Workspace({
@@ -58,6 +59,8 @@ export default function Workspace({
   onCloseFolder,
   onError,
   control,
+  settings,
+  onSettings,
 }: WorkspaceProps) {
   useSyncExternalStore(documents.subscribe, documents.snapshot);
   const [active, setActive] = useState<string>();
@@ -77,24 +80,8 @@ export default function Workspace({
     [],
   );
   const [building, setBuilding] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState(loadSettings);
-  const [systemTheme, setSystemTheme] = useState(0);
-  useEffect(() => {
-    const media = matchMedia('(prefers-color-scheme: dark)');
-    const update = () => setSystemTheme((value) => value + 1);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  useEffect(() => {
-    document.documentElement.dataset.theme = darkTheme(settings) ? 'dark' : 'light';
-    documents.configure(settings);
-    try {
-      localStorage.setItem('elastic.settings', JSON.stringify(settings));
-    } catch {
-      onError('Settings could not be persisted. They still apply to this session.');
-    }
-  }, [documents, settings, systemTheme, onError]);
+  const effectiveTheme = darkTheme(settings);
+  useEffect(() => documents.configure(settings), [documents, settings, effectiveTheme]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -111,7 +98,7 @@ export default function Workspace({
   const [builtRevision, setBuiltRevision] = useState('');
   const [log, setLog] = useState('');
   const [panel, setPanel] = useState<'problems' | 'log' | null>(null);
-  const [mode, setMode] = useState<'split' | 'source' | 'pdf'>('split');
+  const [mode, setMode] = useState<'split' | 'source' | 'pdf'>(settings.defaultView);
   const files = [...documents.files.values()];
   const importImage = useCallback(
     async (image: Blob) => {
@@ -333,11 +320,6 @@ export default function Workspace({
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
       if (!event.metaKey && !event.ctrlKey) return;
-      if (event.key === ',') {
-        event.preventDefault();
-        setSettingsOpen(true);
-        return;
-      }
       if (event.key.toLowerCase() === 'b') {
         event.preventDefault();
         setSidebarHidden((value) => !value);
@@ -416,7 +398,7 @@ export default function Workspace({
           >
             Git
           </button>
-          <button aria-label="Settings" title="Settings (⌘,)" onClick={() => setSettingsOpen(true)}>
+          <button aria-label="Settings" title="Settings (⌘,)" onClick={onSettings}>
             ⚙
           </button>
           <button
@@ -488,7 +470,8 @@ export default function Workspace({
               projectId={project.id}
               projectPath={project.path}
               active={file?.path}
-              onOpen={(path, pin) => openFile(path, undefined, !pin)}
+              onOpen={(path, pin) => openFile(path, undefined, settings.previewTabs && !pin)}
+              revealActive={settings.revealActive}
               onError={onError}
               onBatch={runFileBatch}
               disabled={building || !!gitBusy || fileBusy || reloadFailed}
@@ -576,6 +559,7 @@ export default function Workspace({
                     api={api}
                     artifact={artifact}
                     active={mode !== 'source'}
+                    defaultZoom={settings.pdfZoom}
                     onSource={(path, line) => {
                       if (mode === 'pdf') setMode('split');
                       if (builtRevision !== `${root}:${documents.revisions()}`)
@@ -658,13 +642,6 @@ export default function Workspace({
         </div>
       </div>
       <Suspense fallback={null}>
-        {settingsOpen && (
-          <Settings
-            value={settings}
-            onChange={setSettings}
-            onClose={() => setSettingsOpen(false)}
-          />
-        )}
         {searchOpen && (
           <ProjectSearch
             api={api}

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { defaultSettings } from '../settings/preferences';
 import { Documents, type Document } from './documents';
 
 const content = { text: 'hello\r\nworld', version: 'v1', lineEnding: '\r\n' };
@@ -7,12 +8,44 @@ const edit = (documents: Documents, file: Document, text: string) =>
 afterEach(() => vi.useRealTimers());
 
 describe('document save coordination', () => {
+  it('pins an existing preview when preview tabs are disabled', async () => {
+    const documents = new Documents('project', {
+      saveFile: vi.fn(),
+      readFile: vi.fn().mockResolvedValue(content),
+    });
+    const file = await documents.open('main.tex', true);
+    expect(file.preview).toBe(true);
+    documents.configure({ ...defaultSettings, previewTabs: false });
+    expect(file.preview).toBe(false);
+    expect(documents.files.get('main.tex')).toBe(file);
+    documents.dispose();
+  });
+  it('uses the configured autosave delay', async () => {
+    vi.useFakeTimers();
+    const saveFile = vi.fn().mockResolvedValue('v2');
+    const documents = new Documents('project', { saveFile, readFile: vi.fn() });
+    documents.configure({ ...defaultSettings, autosaveDelay: 1500 });
+    const file = documents.add('main.tex', content);
+    edit(documents, file, 'Delayed ');
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(saveFile).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(saveFile).toHaveBeenCalledTimes(1);
+    documents.dispose();
+  });
   it('allows explicit saving with autosave disabled', async () => {
     vi.useFakeTimers();
     const saveFile = vi.fn().mockResolvedValue('v2');
     const documents = new Documents('project', { saveFile, readFile: vi.fn() });
     const file = documents.add('main.tex', content);
-    documents.configure({ theme: 'light', fontSize: 18, tabSize: 4, wrap: false, autosave: false });
+    documents.configure({
+      ...defaultSettings,
+      theme: 'light',
+      fontSize: 18,
+      tabSize: 4,
+      wrap: false,
+      autosave: false,
+    });
     edit(documents, file, 'Manual save ');
     await vi.advanceTimersByTimeAsync(6000);
     expect(saveFile).not.toHaveBeenCalled();
@@ -21,7 +54,10 @@ describe('document save coordination', () => {
     documents.dispose();
   });
   it('retains a tab when saving it on close fails', async () => {
-    const documents = new Documents('project', { saveFile: vi.fn().mockRejectedValue('Disk unavailable'), readFile: vi.fn() });
+    const documents = new Documents('project', {
+      saveFile: vi.fn().mockRejectedValue('Disk unavailable'),
+      readFile: vi.fn(),
+    });
     const file = documents.add('main.tex', content);
     edit(documents, file, 'Keep ');
     await expect(documents.close(file.path)).rejects.toBe('Disk unavailable');

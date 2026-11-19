@@ -165,7 +165,7 @@ export class Documents {
         /* Error remains on the document. */
       });
     };
-    file.timer = setTimeout(save, 750);
+    file.timer = setTimeout(save, this.settings.autosaveDelay);
     file.deadline ??= setTimeout(save, 5000);
   }
   async save(file: Document): Promise<void> {
@@ -231,6 +231,7 @@ export class Documents {
   configure(settings: EditorSettings) {
     this.settings = settings;
     for (const file of this.files.values()) {
+      if (!settings.previewTabs) file.preview = false;
       clearTimeout(file.timer);
       clearTimeout(file.deadline);
       file.deadline = undefined;

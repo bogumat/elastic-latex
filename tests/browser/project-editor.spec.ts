@@ -136,7 +136,7 @@ test('settings apply to open editors, preserve undo and persist across reloads',
   await page.keyboard.insertText('Retain undo ');
   await page.keyboard.press('Meta+,');
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await dialog.getByLabel('Theme', { exact: true }).selectOption('dark');
+  await dialog.getByLabel('App theme', { exact: true }).selectOption('dark');
   await dialog.getByLabel('Font size', { exact: true }).selectOption('18');
   await dialog.getByLabel('Tab width', { exact: true }).selectOption('4');
   await dialog.getByLabel('Wrap lines', { exact: true }).uncheck();
@@ -153,7 +153,7 @@ test('settings apply to open editors, preserve undo and persist across reloads',
   await page.getByRole('button', { name: 'Open Folder…', exact: true }).click();
   await expect(page.locator('.cm-content')).toBeVisible();
   await page.keyboard.press('Meta+,');
-  await expect(dialog.getByLabel('Theme', { exact: true })).toHaveValue('dark');
+  await expect(dialog.getByLabel('App theme', { exact: true })).toHaveValue('dark');
   await expect(dialog.getByLabel('Font size', { exact: true })).toHaveValue('18');
   await expect(dialog.getByLabel('Autosave', { exact: true })).not.toBeChecked();
 });

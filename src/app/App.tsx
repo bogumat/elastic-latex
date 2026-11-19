@@ -10,8 +10,10 @@ import {
   recentProjects,
   type RecentProject,
 } from '../shared/contracts/backend';
+import { loadSettings, darkTheme, darkPdfTheme } from '../features/settings/preferences';
 import type { Documents } from '../features/editor/documents';
 
+const Settings = lazy(() => import('../features/settings/Settings'));
 const Workspace = lazy(() => import('./Workspace'));
 const CloneDialog = lazy(() => import('../features/git/CloneDialog'));
 
@@ -21,6 +23,34 @@ export default function App() {
   const [documents, setDocuments] = useState<Documents>();
   const [toolchain, setToolchain] = useState<Toolchain>();
   const [error, setError] = useState('');
+  const [settings, setSettings] = useState(loadSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [systemTheme, setSystemTheme] = useState(0);
+  useEffect(() => {
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setSystemTheme((value) => value + 1);
+    const keys = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === ',') {
+        event.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+    media.addEventListener('change', update);
+    window.addEventListener('keydown', keys);
+    return () => {
+      media.removeEventListener('change', update);
+      window.removeEventListener('keydown', keys);
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkTheme(settings) ? 'dark' : 'light';
+    document.documentElement.dataset.pdfTheme = darkPdfTheme(settings) ? 'dark' : 'light';
+    try {
+      localStorage.setItem('elastic.settings', JSON.stringify(settings));
+    } catch {
+      setError('Settings could not be persisted. They still apply to this session.');
+    }
+  }, [settings, systemTheme]);
   const [opening, setOpening] = useState(false);
   const openingRef = useRef(false);
   const [initialRoot, setInitialRoot] = useState('main.tex');
@@ -185,6 +215,8 @@ export default function App() {
             onCloseFolder={closeFolder}
             onError={setError}
             control={workspace}
+            settings={settings}
+            onSettings={() => setSettingsOpen(true)}
           />
         </Suspense>
       ) : (
@@ -194,6 +226,13 @@ export default function App() {
               <span className="brand-mark">e</span>
               <strong>Elastic</strong>
             </div>
+            <button
+              aria-label="Settings"
+              title="Settings (⌘,)"
+              onClick={() => setSettingsOpen(true)}
+            >
+              ⚙
+            </button>
           </header>
           <section className="welcome">
             <div className="welcome-actions">
@@ -225,6 +264,15 @@ export default function App() {
           </section>
         </>
       )}
+      <Suspense fallback={null}>
+        {settingsOpen && (
+          <Settings
+            value={settings}
+            onChange={setSettings}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+      </Suspense>
       {cloning && (
         <Suspense fallback={null}>
           <CloneDialog

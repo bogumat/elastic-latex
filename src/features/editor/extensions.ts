@@ -41,15 +41,12 @@ const commands = [
   'end',
 ];
 export const editorExtensions = [
-  lineNumbers(),
   foldGutter(),
   latexFolding,
-  highlightActiveLineGutter(),
   history(),
   drawSelection(),
   indentOnInput(),
   bracketMatching(),
-  highlightActiveLine(),
   highlightSelectionMatches(),
   StreamLanguage.define(stex),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -103,6 +100,8 @@ const darkHighlight = HighlightStyle.define([
 ]);
 export function settingsExtensions(settings: EditorSettings) {
   return [
+    settings.lineNumbers ? lineNumbers() : [],
+    settings.highlightLine ? [highlightActiveLine(), highlightActiveLineGutter()] : [],
     settings.wrap ? EditorView.lineWrapping : [],
     EditorState.tabSize.of(settings.tabSize),
     indentUnit.of(' '.repeat(settings.tabSize)),

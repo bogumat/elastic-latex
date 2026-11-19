@@ -15,6 +15,7 @@ export const FileTree = memo(function FileTree({
   projectId,
   projectPath,
   active,
+  revealActive = true,
   onOpen,
   onError,
   onBatch,
@@ -24,6 +25,7 @@ export const FileTree = memo(function FileTree({
   projectId: string;
   projectPath?: string;
   active?: string;
+  revealActive?: boolean;
   onOpen: (path: string, pin?: boolean) => void;
   onError: (message: string) => void;
   onBatch: (operations: FileOperation[]) => Promise<FileBatchResult>;
@@ -170,11 +172,11 @@ export const FileTree = memo(function FileTree({
     submitting.current = false;
   }
   useEffect(() => {
-    void refresh(active).catch((reason) => onError(String(reason)));
+    void refresh(revealActive ? active : undefined).catch((reason) => onError(String(reason)));
     return () => {
       epoch.current++;
     };
-  }, [api, projectId, onError, revision, active]);
+  }, [api, projectId, onError, revision, active, revealActive]);
   async function toggle(row: Row) {
     if (!row.directory) return onOpen(row.path);
     if (expanded.has(row.path)) {

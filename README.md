@@ -49,7 +49,7 @@ Install your own normal Rust toolchain for ongoing development; `/private/tmp` i
 - Editor tabs support close buttons, middle-click close, drag reordering, and italic preview tabs. Single-clicking a file previews it; double-click the file/tab or edit it to keep it open. Closing an edited tab saves it first; a save failure keeps it open.
 - **⌘P** opens Quick Open with fuzzy filename matching, keyboard selection and nested paths. **⌘⇧F** opens project search, with case matching, grouped line results and literal Replace All. Search includes unsaved open buffers; replacement retains undo history in affected tabs and saves changes with disk-version checks.
 - Drag the sidebar divider to resize it, or use **⌘B** / the sidebar button to hide/show it. Width is remembered locally and files opened from search are revealed automatically. Breadcrumb folder menus browse siblings; the current LaTeX section is linked beside the filename.
-- **⌘,** / the gear button opens Settings: Light/Dark/System theme, font size, tab width, line wrapping and autosave. Preferences apply to existing tabs without resetting undo and persist locally. Manual ⌘S and save-on-close still work with autosave disabled.
+- **⌘,** / the gear button opens searchable Settings, including from the welcome screen. Categories cover Appearance, Editor, Files & Saving, Workspace and PDF Viewer. App and PDF themes are independent; PDF supports Light/Dark/Follow App/System. Editor, autosave, tab/reveal and default view/zoom preferences persist locally. Manual ⌘S and save-on-close still work with autosave disabled.
 - Edit UTF-8 LaTeX/BibTeX source in CodeMirror, with syntax highlighting, completions, find/replace, line numbers, and retained tab selections/undo history.
 - Revision-aware autosave, atomic replacement, preserved LF/CRLF and file permissions, and pre-write external-change checks. Failed writes keep edits dirty. Closing the window and switching projects flush pending saves.
 - Explicit root selection. Prefer `main.tex`, otherwise automatically choose only a single top-level candidate. If there are several, open the desired source and select it in **Root**.
@@ -59,6 +59,22 @@ Install your own normal Rust toolchain for ongoing development; `/private/tmp` i
 - Double-click PDF text or images to open the matching `.tex` source line using SyncTeX. PDF-only view switches to Split so the source is visible. Recompile after source changes for accurate navigation.
 - Collapse environments, multiline brace groups, and section contents using the arrows beside source line numbers; click the folded placeholder to expand again. Folding only affects display; hidden text is still saved and compiled.
 - Source/split/PDF views and a keyboard-accessible source/preview divider.
+
+## Settings and code review
+
+The Settings catalog is data-driven (`src/features/settings/catalog.ts`), with validated persistent values in `preferences.ts`. Adding a control requires a catalog entry, default, validator and a behavior binding. Existing saved preferences migrate with defaults for new fields.
+
+| Category | Available controls |
+| --- | --- |
+| Appearance | App theme: Light, Dark, System |
+| Editor | Font size, tab width, wrapping, line numbers, current-line highlighting |
+| Files & Saving | Autosave, autosave delay (0.25–3 seconds), preview tabs |
+| Workspace | Automatic active-file reveal, default project layout |
+| PDF Viewer | Independent PDF theme, default zoom |
+
+PDF dark mode changes the viewer background, controls and rendered page colors. It inverts page colors, including embedded images, using a display filter. It does not change the PDF file or exported colors, reload the PDF, or reset scrolling. Use PDF Light mode when inspecting original image/chart colors. Default zoom changes apply to the current preview; default workspace layout is used the next time a project opens. Autosave retains the five-second ceiling during continuous typing. Disabling preview tabs pins existing preview tabs.
+
+Further candidates found in the code review are TeX engine/toolchain selection (`builds.rs` currently discovers latexmk/pdfLaTeX), configurable build timeout (currently 120 seconds), search exclusions/file types (`project_index.rs`), keyboard shortcut overrides, and PDF resolution/cache limits. These require backend/validation or performance work before exposing them as working settings; they are not currently controls.
 
 ## Prototype limits
 

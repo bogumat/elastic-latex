@@ -1123,3 +1123,107 @@ textarea:focus-visible {
 :root[data-theme='dark'] .view-switch button[aria-pressed='true'] {
   background: var(--selection);
 }
+
+.settings-panel > input {
+  width: 100%;
+}
+.settings-panel nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 12px 0;
+}
+.settings-panel nav button {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.settings-panel nav [aria-pressed='true'] {
+  background: var(--selection);
+}
+.settings-content {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.settings-content fieldset {
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.settings-content legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 6px 0 16px;
+}
+.settings-row:last-child {
+  margin-bottom: 4px;
+}
+.settings-row select {
+  min-width: 130px;
+  max-width: 190px;
+}
+.settings-row p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.settings-panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+
+:root[data-pdf-theme='light'] .preview-pane {
+  --pdf-background: #e8edf2;
+  --pdf-surface: #f5f7fa;
+  --pdf-text: #253242;
+  --pdf-border: #cfd7e0;
+  --pdf-selection: #dce7f2;
+  color-scheme: light;
+}
+:root[data-pdf-theme='dark'] .preview-pane {
+  --pdf-background: #10151d;
+  --pdf-surface: #1c2430;
+  --pdf-text: #e1e9f3;
+  --pdf-border: #354357;
+  --pdf-selection: #30465d;
+  color-scheme: dark;
+}
+:root[data-pdf-theme] .preview-pane {
+  background: var(--pdf-background);
+  color: var(--pdf-text);
+  --selection: var(--pdf-selection);
+}
+:root[data-pdf-theme] .preview-pane .pdf-viewport {
+  background: var(--pdf-background);
+}
+:root[data-pdf-theme] .preview-pane .pane-toolbar,
+:root[data-pdf-theme] .preview-pane .preview-notice {
+  background: var(--pdf-surface);
+  color: var(--pdf-text);
+  border-color: var(--pdf-border);
+}
+:root[data-pdf-theme] .preview-pane .empty-state,
+:root[data-pdf-theme] .preview-pane .empty-state h2 {
+  color: var(--pdf-text);
+}
+:root[data-pdf-theme='dark'] .preview-pane .pdf-page {
+  background: #1a1a1a;
+  box-shadow: 0 2px 12px #0008;
+}
+:root[data-pdf-theme='dark'] .preview-pane .pdf-page canvas {
+  filter: invert(0.9) hue-rotate(180deg);
+}
