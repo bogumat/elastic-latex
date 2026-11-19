@@ -59,6 +59,7 @@ export default function Workspace({
   const [treeVersion, setTreeVersion] = useState(0);
   const [reloadFailed, setReloadFailed] = useState(false);
   const busy = useRef(false);
+  const pendingCompile = useRef(false);
   const [result, setResult] = useState<BuildResult>();
   const [artifact, setArtifact] = useState<Artifact>();
   const [builtRevision, setBuiltRevision] = useState('');
@@ -102,8 +103,12 @@ export default function Workspace({
     [documents, onError],
   );
   const compile = useCallback(async () => {
-    if (busy.current || reloadFailed) {
-      onError('Wait for the active operation or reload files before saving and compiling.');
+    if (reloadFailed) {
+      onError('Reload files before saving and compiling. Your edits remain in the editor.');
+      return;
+    }
+    if (busy.current) {
+      pendingCompile.current = true;
       return;
     }
     busy.current = true;
@@ -142,6 +147,12 @@ export default function Workspace({
       documents.holdAutosave(false);
     }
   }, [api, documents, onError, project.id, root, toolchain, reloadFailed]);
+  useEffect(() => {
+    if (!building && !gitBusy && !busy.current && pendingCompile.current) {
+      pendingCompile.current = false;
+      void compile();
+    }
+  }, [building, gitBusy, compile]);
   const refreshBuffers = useCallback(async () => {
     try {
       await documents.reloadSaved((paths) => api.reloadFiles(project.id, paths));

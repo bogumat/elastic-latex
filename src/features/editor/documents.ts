@@ -164,9 +164,21 @@ export class Documents {
     if (file.revision !== file.savedRevision) this.schedule(file);
   }
   async saveAll() {
+    const errors: string[] = [];
     // Compilation/project switching must include assets still being imported.
-    while (this.pastes.size) await Promise.all(this.pastes.keys());
-    for (const file of this.files.values()) await this.save(file);
+    while (this.pastes.size) {
+      const results = await Promise.allSettled(this.pastes.keys());
+      for (const result of results)
+        if (result.status === 'rejected') errors.push(String(result.reason));
+    }
+    for (const file of this.files.values()) {
+      try {
+        await this.save(file);
+      } catch (reason) {
+        errors.push(`${file.path}: ${String(reason)}`);
+      }
+    }
+    if (errors.length) throw new Error(errors.join('\n'));
     if (this.dirty) throw new Error('The document changed while saving. Please compile again.');
   }
   holdAutosave(held: boolean) {

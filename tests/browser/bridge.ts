@@ -114,7 +114,9 @@ mockIPC(
       }
       case 'compile': {
         const failed = source.includes('broken');
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolve) =>
+          setTimeout(resolve, new URLSearchParams(location.search).has('slowbuild') ? 1200 : 200),
+        );
         return {
           projectId: 'test',
           buildId: String(++build),

@@ -102,11 +102,31 @@ describe('document save coordination', () => {
     });
     const file = documents.add('main.tex', content);
     edit(documents, file, 'new');
-    await expect(documents.saveAll()).rejects.toBe('external change');
+    await expect(documents.saveAll()).rejects.toThrow('main.tex: external change');
     expect(documents.dirty).toBe(true);
     expect(file.version).toBe('v1');
     expect(file.status).toBe('error');
     expect(file.state.sliceDoc()).toContain('new');
+    documents.dispose();
+  });
+
+  it('attempts every edited file even when an earlier file cannot be saved', async () => {
+    const disk = new Map<string, string>();
+    const saveFile = vi.fn(async (_project, path: string, text: string) => {
+      if (path === 'main.tex') throw new Error('External change');
+      disk.set(path, text);
+      return 'v2';
+    });
+    const documents = new Documents('project', { saveFile, readFile: vi.fn() });
+    const main = documents.add('main.tex', content);
+    const chapter = documents.add('chapters/introduction.tex', content);
+    edit(documents, main, 'Retain main ');
+    edit(documents, chapter, 'Save chapter ');
+    await expect(documents.saveAll()).rejects.toThrow('main.tex: Error: External change');
+    expect(disk.get(chapter.path)).toBe('Save chapter hello\r\nworld');
+    expect(chapter.status).toBe('saved');
+    expect(main.status).toBe('error');
+    expect(main.state.sliceDoc()).toContain('Retain main');
     documents.dispose();
   });
 

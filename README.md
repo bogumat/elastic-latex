@@ -13,6 +13,8 @@ npm run tauri -- dev
 
 Open `tests/fixtures/article` in the app for a small multi-file example. Select a root document, edit, and press **⌘ S** or **⌘ Enter** to save all open documents and compile. Compilation waits for pending image pastes and successful saves. If TeX is unavailable or no root is selected, ⌘ S still saves and explains what is needed to compile. Ordinary edits autosave after 750 ms, with a five-second maximum interval during continuous typing. Saves are deferred while a build is reading the project; the status bar makes this explicit.
 
+Pressing **⌘ S** during a build or Git operation queues another save-all and compile after it finishes. All edited files are attempted even if one save fails; the failed files retain their edits and report their paths, and compilation stops until saving succeeds. Files are written to their original locations in the working folder; Git commits and pushes remain separate actions.
+
 ```sh
 npm run tauri -- build --bundles app
 open src-tauri/target/release/bundle/macos/Elastic.app

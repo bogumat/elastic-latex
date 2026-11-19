@@ -82,6 +82,30 @@ test('Command-S keeps edits and does not compile when saving fails', async ({ pa
   await expect(page.locator('.cm-content')).toContainText('Retained change');
 });
 
+test('Command-S during a build queues saving the latest changes before the next compile', async ({
+  page,
+}) => {
+  await open(page, '?slowbuild=1');
+  await page.locator('.cm-content').click();
+  await page.keyboard.insertText('First change');
+  await page.keyboard.press('Meta+s');
+  await expect(page.getByRole('button', { name: '■ Stop build' })).toBeVisible();
+  await page.keyboard.insertText('Second change');
+  await page.keyboard.press('Meta+s');
+  await expect
+    .poll(async () => (await calls(page)).filter((call) => call.command === 'compile').length)
+    .toBe(2);
+  await expect(page.getByRole('button', { name: '▷ Compile' })).toBeVisible();
+  const history = await calls(page);
+  const compiles = history.flatMap((call, index) => (call.command === 'compile' ? [index] : []));
+  const save = history.findIndex(
+    (call) => call.command === 'save_file' && call.args.text.includes('Second change'),
+  );
+  expect(save).toBeGreaterThan(compiles[0]);
+  expect(save).toBeLessThan(compiles[1]);
+  await expect(page.getByRole('tab', { name: 'main.tex', exact: true })).toBeVisible();
+});
+
 test('Command-S still saves when TeX is unavailable', async ({ page }) => {
   await open(page, '?notex=1');
   await page.locator('.cm-content').click();
