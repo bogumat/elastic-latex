@@ -1,0 +1,835 @@
+@import './tokens.css';
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--background);
+}
+button,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) {
+  background: var(--selection);
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+button.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  padding: 9px 16px;
+}
+button.primary:hover:not(:disabled) {
+  background: #36536d;
+}
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.app-header {
+  height: 65px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f9fb;
+}
+.brand,
+.header-actions,
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand {
+  white-space: nowrap;
+}
+.brand strong {
+  font-size: 16px;
+  letter-spacing: -0.5px;
+}
+.brand-mark {
+  width: 27px;
+  height: 28px;
+  color: var(--accent);
+  font:
+    italic 34px Georgia,
+    serif;
+  line-height: 20px;
+}
+.header-divider {
+  height: 20px;
+  width: 1px;
+  background: var(--border);
+  margin: 0 7px;
+}
+.root-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--secondary);
+  font-size: 12px;
+  margin: 0 8px;
+}
+select {
+  max-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: white;
+}
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.workspace-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.explorer {
+  width: 205px;
+  flex-shrink: 0;
+  background: #edf1f5;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.pane-toolbar {
+  height: 43px;
+  min-height: 43px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--secondary);
+  font-size: 11px;
+}
+.explorer > .pane-toolbar > span {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 1.3px;
+}
+.tree-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 12px;
+}
+.tree-empty {
+  padding: 12px;
+}
+.tree-row {
+  position: absolute;
+  height: 32px;
+  width: 100%;
+  left: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 0;
+  overflow: hidden;
+}
+.tree-row > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-row.selected {
+  background: var(--selection);
+  color: #304d68;
+}
+.file-symbol {
+  color: #74889b;
+  font-size: 16px;
+}
+.explorer-footer {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: var(--secondary);
+  padding: 18px;
+}
+.workspace-toolbar {
+  height: 43px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.view-switch {
+  display: flex;
+  background: #e6ebf0;
+  padding: 2px;
+  border-radius: 5px;
+}
+.view-switch button {
+  padding: 4px 13px;
+  font-size: 11px;
+}
+.view-switch button[aria-pressed='true'] {
+  background: white;
+  box-shadow: 0 1px 2px #25324214;
+}
+.panes {
+  --split: 50%;
+  display: grid;
+  grid-template-columns: minmax(0, var(--split)) 5px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.source-pane {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  min-height: 0;
+  min-width: 0;
+}
+.tabs {
+  display: flex;
+  flex-shrink: 0;
+  height: 43px;
+  overflow: auto;
+  background: #f6f8fa;
+  border-bottom: 1px solid var(--border);
+}
+.tabs button {
+  border-radius: 0;
+  padding: 0 20px;
+  color: var(--secondary);
+  border-right: 1px solid #e2e7ed;
+}
+.tabs button[aria-selected='true'] {
+  background: white;
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+}
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.divider {
+  cursor: col-resize;
+  background: #e0e6ec;
+  touch-action: none;
+}
+.divider:hover,
+.divider:focus {
+  background: var(--accent);
+}
+.preview-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #e8edf2;
+}
+.preview-pane > .pane-toolbar {
+  background: #f5f7f9;
+}
+.preview {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+.preview > .pane-toolbar {
+  background: #f5f7f9;
+}
+.preview .toolbar-group {
+  gap: 2px;
+}
+.preview button {
+  padding: 5px 8px;
+}
+.pdf-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Keep fit-width sizing independent of whether the page needs scrolling.
+     Older WebKit versions reserve the same space with an always-on scrollbar. */
+  overflow-y: scroll;
+}
+.file-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.file-actions button {
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+.create-entry {
+  padding: 4px 12px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.create-entry label {
+  display: block;
+  font-size: 12px;
+}
+.create-entry input {
+  width: 100%;
+  margin: 6px 0;
+}
+.create-entry .file-actions {
+  padding: 8px 0 0;
+}
+.create-entry p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+@supports (scrollbar-gutter: stable) {
+  .pdf-viewport {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+.pdf-pages {
+  padding: 24px;
+  min-width: min-content;
+}
+.pdf-page {
+  position: relative;
+  margin: 0 auto;
+  box-shadow: 0 2px 10px #25324218;
+  background: white;
+}
+.pdf-page canvas {
+  display: block;
+}
+.preview-notice {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 9px 12px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 25px;
+  text-align: center;
+  color: var(--secondary);
+}
+.empty-state h2 {
+  color: #53677b;
+  font-weight: 500;
+  font-size: 17px;
+  margin: 22px 0 10px;
+}
+.empty-state p {
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.paper-outline {
+  width: 64px;
+  height: 82px;
+  border: 1px solid #a4b4c4;
+  border-radius: 3px;
+  padding: 22px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.paper-outline span {
+  height: 1px;
+  width: 100%;
+  background: #a4b4c4;
+}
+.paper-outline span:first-child {
+  width: 60%;
+}
+.key-hint {
+  margin-top: 22px;
+  border: 1px solid #c4ced8;
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 12px;
+  color: #738599;
+}
+.build-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: #f8fafc;
+}
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 39px;
+  padding: 0 10px;
+}
+.panel-tabs button {
+  font-size: 11px;
+}
+.panel-tabs button[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--selection);
+}
+.count {
+  padding: 1px 5px;
+  background: #e4eaf0;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+.panel-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--secondary);
+  padding-right: 8px;
+}
+.build-log,
+.problems {
+  height: 175px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.build-log {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.problems button {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+}
+.problems button span {
+  flex-shrink: 0;
+  color: var(--error);
+}
+.status-bar {
+  height: 31px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 17px;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--secondary);
+  background: #f1f4f7;
+}
+.status-bar > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5c816c;
+  margin-right: 7px;
+}
+.status-dot.unsaved,
+.status-dot.saving {
+  background: #a88045;
+}
+.status-dot.error {
+  background: var(--error);
+}
+.status-divider {
+  padding: 0 12px;
+  color: #a8b5c3;
+}
+.muted {
+  color: var(--secondary);
+}
+.small {
+  font-size: 11px;
+}
+.error {
+  color: var(--error);
+}
+.demo-banner {
+  padding: 7px 22px;
+  border-bottom: 1px solid var(--border);
+  color: #5c6f82;
+  font-size: 11px;
+  background: #edf2f7;
+}
+.error-banner {
+  position: absolute;
+  bottom: 42px;
+  left: 24px;
+  right: 24px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff5f3;
+  color: var(--error);
+  border: 1px solid #dba7a2;
+  border-radius: 5px;
+  z-index: 100;
+}
+.welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 65px;
+}
+.welcome .toolchain-message {
+  margin-top: 60px;
+  max-width: 500px;
+  text-align: center;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.mode-source {
+  grid-template-columns: 1fr;
+}
+.mode-source .preview-pane,
+.mode-source .divider {
+  display: none;
+}
+.mode-pdf {
+  grid-template-columns: 1fr;
+}
+.mode-pdf .source-pane,
+.mode-pdf .divider {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .app-header {
+    padding: 0 14px;
+  }
+  .brand strong,
+  .header-divider {
+    display: none;
+  }
+  .header-actions {
+    gap: 3px;
+  }
+  .explorer {
+    width: 165px;
+  }
+  .root-picker {
+    margin: 0 3px;
+  }
+  select {
+    max-width: 120px;
+  }
+  .tabs button {
+    padding: 0 13px;
+  }
+}
+
+/* Working folders and optional source control. */
+.welcome-actions {
+  display: flex;
+  gap: 12px;
+  margin: 24px 0 18px;
+}
+.secondary {
+  border-color: var(--border);
+  background: white;
+}
+.recent-projects {
+  width: min(560px, 80vw);
+  margin-top: 24px;
+}
+.recent-projects h2 {
+  font-size: 11px;
+  color: var(--secondary);
+  font-weight: 500;
+}
+.recent-projects button {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  padding: 9px 0;
+  text-align: left;
+}
+.recent-projects button span {
+  color: var(--secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  margin-left: auto;
+}
+.project-dialog {
+  width: min(560px, 90vw);
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  color: var(--text);
+  box-shadow: 0 14px 50px #25324230;
+}
+.project-dialog::backdrop {
+  background: #25324245;
+}
+.project-dialog header,
+.project-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.project-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 550;
+}
+.project-dialog label,
+.git-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 18px 0 10px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.project-dialog input:not([type='checkbox']),
+.git-panel textarea {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px;
+  background: white;
+  color: var(--text);
+  font: inherit;
+  width: 100%;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.project-dialog .checkbox-label {
+  flex-direction: row;
+  align-items: center;
+}
+.folder-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.folder-picker button {
+  border: 1px solid var(--border);
+}
+.clone-destination {
+  font-size: 11px;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+.project-dialog footer {
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+.git-panel {
+  width: 320px;
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: #f6f8fa;
+  min-height: 0;
+}
+.git-content {
+  overflow: auto;
+  padding: 16px;
+  flex: 1;
+}
+.git-panel .pane-toolbar {
+  letter-spacing: 0.5px;
+}
+.git-branch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.git-branch strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.git-branch span {
+  color: var(--secondary);
+  white-space: nowrap;
+}
+.git-panel select {
+  max-width: none;
+  width: 100%;
+}
+.remote-detail {
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+.remote-detail span {
+  display: block;
+}
+.git-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+}
+.git-actions button,
+.fork-button {
+  border: 1px solid var(--border);
+  background: white;
+}
+.git-actions button {
+  flex: 1;
+}
+.fork-button {
+  width: 100%;
+}
+.git-panel h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 22px 0 10px;
+}
+.git-changes {
+  max-height: 230px;
+  overflow: auto;
+}
+.git-changes button {
+  width: 100%;
+  display: flex;
+  text-align: left;
+  gap: 12px;
+  padding: 7px 4px;
+}
+.git-changes button code {
+  white-space: pre;
+  color: var(--accent);
+}
+.git-changes button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.git-changes button.selected {
+  background: var(--selection);
+}
+.git-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 220px;
+  overflow: auto;
+}
+.git-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.git-auth {
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.git-auth summary,
+.diff-details summary {
+  cursor: pointer;
+}
+.git-panel textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.git-panel .primary {
+  width: 100%;
+}
+.git-diff {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 250px;
+  overflow: auto;
+  padding: 12px;
+  background: white;
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+.diff-details summary {
+  font-size: 11px;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.git-content .small,
+.project-dialog .small {
+  line-height: 1.65;
+}
+@media (max-width: 1100px) {
+  .app-header .brand {
+    max-width: 160px;
+    overflow: hidden;
+  }
+  .header-actions {
+    gap: 1px;
+  }
+  .header-actions > button {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .root-picker select {
+    max-width: 100px;
+  }
+}
