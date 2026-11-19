@@ -752,6 +752,7 @@ name = "elastic"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "sha2 0.10.9",

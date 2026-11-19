@@ -54,3 +54,9 @@ The viewer now keeps page geometry for the whole document while painting only th
 The real TeX integration suite verifies inverse SyncTeX for text and an image in an included source file whose name contains spaces; the immutable published map survives a later failed build. Browser tests verify opening the source line from PDF-only view and explaining missing maps. Source folding covers nested environments, multiline brace groups and sections, ignoring comments and verbatim contents. The native performance acceptance gate remains open.
 
 Validation for this extension: 18 Rust tests (including real TeX/SyncTeX), 18 frontend tests, and 19 browser tests passed. TypeScript production build and macOS app packaging succeeded; the package is about 15.36 MiB.
+
+## Sidebar file management
+
+File operations are serialized with builds/Git, save all open buffers first, and pause source editing while paths change. Moves/renames retain buffer identity and undo history, remap descendant tabs and the selected root, and invalidate the PDF. macOS exclusive renames reject collisions; recursive copies stage privately before publication, reject symlinks/special files and enforce item/byte limits. Trash uses NSFileManager rather than permanent deletion. The native integration test moved a disposable fixture to macOS Trash and restored it, leaving the fixture cleanup to its temporary directory.
+
+Validation includes 21 Rust tests (with the real TeX/SyncTeX and Trash cases), 20 frontend tests, and 23 browser tests. New browser coverage verifies dragging an edited root into a folder, renaming its parent, saving at the new path, Cut/Copy/Paste, Duplicate, keyboard file actions, path-copy dispatch, collision errors, saving before Trash, and closing removed tabs. Reveal in Finder and path copying are dispatched through the native backend; the browser bridge does not launch Finder or modify the system clipboard. The native performance acceptance gate remains open.

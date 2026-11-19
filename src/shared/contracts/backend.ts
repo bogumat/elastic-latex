@@ -34,6 +34,12 @@ export interface BuildResult {
   elapsedMs: number;
 }
 export interface Backend {
+  fileAction(
+    projectId: string,
+    action: FileAction,
+    path: string,
+    destination: string,
+  ): Promise<void>;
   openProject(path: string): Promise<Project>;
   listEntries(projectId: string, directory: string): Promise<Entry[]>;
   createEntry(projectId: string, path: string, directory: boolean): Promise<void>;
@@ -55,7 +61,10 @@ export interface Backend {
   reloadFiles(projectId: string, paths: string[]): Promise<Record<string, FileData | null>>;
 }
 export const desktop = isTauri();
+export type FileAction = 'move' | 'copy' | 'trash' | 'reveal' | 'copy-path' | 'copy-relative-path';
 export const backend: Backend = {
+  fileAction: (projectId, action, path, destination) =>
+    invoke('file_action', { projectId, action, path, destination }),
   openProject: (path) => invoke('open_project', { path }),
   listEntries: (projectId, directory) => invoke('list_entries', { projectId, directory }),
   createEntry: (projectId, path, directory) =>

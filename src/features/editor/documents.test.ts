@@ -7,6 +7,23 @@ const edit = (documents: Documents, file: Document, text: string) =>
 afterEach(() => vi.useRealTimers());
 
 describe('document save coordination', () => {
+  it('retains buffers and undo history when moving a folder, then closes trashed descendants', () => {
+    const documents = new Documents('project', { saveFile: vi.fn(), readFile: vi.fn() });
+    const file = documents.add('chapters/intro.tex', content);
+    const unrelated = documents.add('chapters-other/keep.tex', content);
+    edit(documents, file, 'Retained edit ');
+    const state = file.state;
+    documents.relocate('chapters', 'sections');
+    expect(documents.files.get('sections/intro.tex')).toBe(file);
+    expect(file.path).toBe('sections/intro.tex');
+    expect(file.state).toBe(state);
+    expect(file.state.sliceDoc()).toContain('Retained edit');
+    expect(documents.files.get(unrelated.path)).toBe(unrelated);
+    documents.relocate('sections', null);
+    expect(documents.files.has('sections/intro.tex')).toBe(false);
+    expect(documents.files.size).toBe(1);
+    documents.dispose();
+  });
   it('waits for an asynchronous paste and maps its position through intervening edits', async () => {
     const saveFile = vi.fn().mockResolvedValue('v2');
     const documents = new Documents('project', { saveFile, readFile: vi.fn() });

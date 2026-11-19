@@ -38,6 +38,9 @@ const files = new Map([
 ]);
 const folders = new Set<string>();
 export const demo: Backend = {
+  fileAction: async () => {
+    throw new Error('File management requires the desktop app.');
+  },
   openProject: async () => ({ id: 'browser-sample', name: 'First thoughts' }),
   listEntries: async (_, directory) =>
     [...folders, ...files.keys()]

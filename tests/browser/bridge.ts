@@ -5,6 +5,7 @@ Object.assign(globalThis, { isTauri: true });
 let source = '\\documentclass{article}\n\\begin{document}\nHello Elastic\n\\end{document}';
 let build = 0;
 let version = '1';
+let mainPath = 'main.tex';
 const extraFiles = new Map<string, string>();
 const folders = new Set<string>();
 let imageCount = 0;
@@ -71,7 +72,13 @@ mockIPC(
         const entries = [...folders, ...extraFiles.keys()]
           .filter((path) => path.split('/').slice(0, -1).join('/') === directory)
           .map((path) => ({ path, name: path.split('/').pop()!, directory: folders.has(path) }));
-        if (directory) return entries;
+        if (directory)
+          return [
+            ...entries,
+            ...(mainPath && mainPath.split('/').slice(0, -1).join('/') === directory
+              ? [{ path: mainPath, name: mainPath.split('/').pop()!, directory: false }]
+              : []),
+          ];
         if (new URLSearchParams(location.search).has('multiple')) {
           return ['article.tex', 'notes.tex'].map((path) => ({
             path,
@@ -79,7 +86,49 @@ mockIPC(
             directory: false,
           }));
         }
-        return [...entries, { path: 'main.tex', name: 'main.tex', directory: false }];
+        return [
+          ...entries,
+          ...(mainPath && !mainPath.includes('/')
+            ? [{ path: mainPath, name: mainPath, directory: false }]
+            : []),
+        ];
+      }
+      case 'file_action': {
+        const { action, path, destination } = args as {
+          action: string;
+          path: string;
+          destination: string;
+        };
+        if (action === 'reveal' || action === 'copy-path' || action === 'copy-relative-path')
+          return;
+        if (!folders.has(path) && !extraFiles.has(path) && mainPath !== path)
+          throw new Error('Source no longer exists');
+        if (
+          destination &&
+          (folders.has(destination) || extraFiles.has(destination) || mainPath === destination)
+        )
+          throw new Error('A file or folder already exists at the destination.');
+        if (destination === path || destination.startsWith(`${path}/`))
+          throw new Error('Choose a different destination outside the source folder.');
+        const matches = (value: string) => value === path || value.startsWith(`${path}/`);
+        const moved = (value: string) => destination + value.slice(path.length);
+        const snapshot = [...extraFiles];
+        const directories = [...folders];
+        if (mainPath && matches(mainPath)) {
+          if (action === 'copy') extraFiles.set(moved(mainPath), source);
+          else mainPath = action === 'trash' ? '' : moved(mainPath);
+        }
+        for (const [key, value] of snapshot)
+          if (matches(key)) {
+            if (action !== 'copy') extraFiles.delete(key);
+            if (action !== 'trash') extraFiles.set(moved(key), value);
+          }
+        for (const key of directories)
+          if (matches(key)) {
+            if (action !== 'copy') folders.delete(key);
+            if (action !== 'trash') folders.add(moved(key));
+          }
+        return;
       }
       case 'create_entry': {
         const { path, directory } = args as { path: string; directory: boolean };

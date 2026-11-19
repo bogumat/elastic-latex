@@ -19,3 +19,6 @@ sha2 = "0.10"
 tokio = { version = "1", features = ["process", "io-util", "fs", "sync", "time", "macros"] }
 libc = "0.2"
 tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSFileManager", "NSString", "NSURL", "NSError"] }

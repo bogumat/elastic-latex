@@ -14,6 +14,7 @@ import {
   type BuildResult,
   type Project,
   type Toolchain,
+  type FileAction,
 } from '../shared/contracts/backend';
 import type { Documents, Document } from '../features/editor/documents';
 import { Editor } from '../features/editor/Editor';
@@ -56,6 +57,7 @@ export default function Workspace({
   const [building, setBuilding] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
   const [gitBusy, setGitBusy] = useState<GitAction | null>(null);
+  const [fileBusy, setFileBusy] = useState(false);
   const [treeVersion, setTreeVersion] = useState(0);
   const [reloadFailed, setReloadFailed] = useState(false);
   const busy = useRef(false);
@@ -148,11 +150,47 @@ export default function Workspace({
     }
   }, [api, documents, onError, project.id, root, toolchain, reloadFailed]);
   useEffect(() => {
-    if (!building && !gitBusy && !busy.current && pendingCompile.current) {
+    if (!building && !gitBusy && !fileBusy && !busy.current && pendingCompile.current) {
       pendingCompile.current = false;
       void compile();
     }
-  }, [building, gitBusy, compile]);
+  }, [building, gitBusy, fileBusy, compile]);
+  const runFileAction = useCallback(
+    async (action: FileAction, path: string, destination = '') => {
+      if (busy.current || reloadFailed)
+        throw new Error('Finish the active operation before changing files.');
+      busy.current = true;
+      setFileBusy(true);
+      documents.holdAutosave(true);
+      try {
+        await documents.saveAll();
+        await api.fileAction(project.id, action, path, destination);
+        if (action === 'move' || action === 'trash') {
+          const target = action === 'trash' ? null : destination;
+          const remap = (value: string) =>
+            value === path || value.startsWith(`${path}/`)
+              ? target === null
+                ? ''
+                : target + value.slice(path.length)
+              : value;
+          documents.relocate(path, target);
+          setRoot(remap);
+          setActive((value) => (value ? remap(value) || undefined : undefined));
+          setNavigation((value) => value + 1);
+        }
+        if (action === 'move' || action === 'copy' || action === 'trash') {
+          setArtifact(undefined);
+          setResult(undefined);
+          setBuiltRevision('');
+        }
+      } finally {
+        documents.holdAutosave(false);
+        busy.current = false;
+        setFileBusy(false);
+      }
+    },
+    [api, documents, project.id, reloadFailed],
+  );
   const refreshBuffers = useCallback(async () => {
     try {
       await documents.reloadSaved((paths) => api.reloadFiles(project.id, paths));
@@ -245,23 +283,29 @@ export default function Workspace({
           <span title={project.path}>{project.name}</span>
         </div>
         <div className="header-actions">
-          <button onClick={() => void onOpen()} disabled={!desktop || building || !!gitBusy}>
+          <button
+            onClick={() => void onOpen()}
+            disabled={!desktop || building || !!gitBusy || fileBusy}
+          >
             Open Folder…
           </button>
-          <button onClick={() => void onClone()} disabled={!desktop || building || !!gitBusy}>
+          <button
+            onClick={() => void onClone()}
+            disabled={!desktop || building || !!gitBusy || fileBusy}
+          >
             Clone…
           </button>
           <button
             onClick={() => setGitOpen((value) => !value)}
             aria-pressed={gitOpen}
-            disabled={!desktop || !!gitBusy}
+            disabled={!desktop || !!gitBusy || fileBusy}
           >
             Git
           </button>
           <button
             className="close-folder"
             onClick={() => void onCloseFolder()}
-            disabled={!desktop || building || !!gitBusy}
+            disabled={!desktop || building || !!gitBusy || fileBusy}
             title="Close working folder"
             aria-label="Close working folder"
           >
@@ -272,7 +316,7 @@ export default function Workspace({
             <select
               aria-label="Root document"
               value={root}
-              disabled={building || !!gitBusy}
+              disabled={building || !!gitBusy || fileBusy}
               onChange={(event) => setRoot(event.target.value)}
             >
               <option value="" disabled>
@@ -323,10 +367,12 @@ export default function Workspace({
             key={`${project.id}:${treeVersion}`}
             api={api}
             projectId={project.id}
+            projectPath={project.path}
             active={file?.path}
             onOpen={openFile}
             onError={onError}
-            disabled={building || !!gitBusy || reloadFailed}
+            onAction={runFileAction}
+            disabled={building || !!gitBusy || fileBusy || reloadFailed}
           />
         )}
         {gitOpen && (
@@ -334,7 +380,7 @@ export default function Workspace({
             <GitPanel
               projectId={project.id}
               busy={gitBusy}
-              blocked={building || reloadFailed}
+              blocked={building || fileBusy || reloadFailed}
               onAction={runGit}
               onClose={() => setGitOpen(false)}
             />
@@ -375,7 +421,7 @@ export default function Workspace({
                   file={file}
                   line={line}
                   navigation={navigation}
-                  readOnly={gitBusy === 'pull' || reloadFailed}
+                  readOnly={gitBusy === 'pull' || fileBusy || reloadFailed}
                   onPasteImage={importImage}
                   onError={onError}
                 />

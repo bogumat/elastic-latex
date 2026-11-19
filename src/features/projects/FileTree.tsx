@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { Backend, Entry } from '../../shared/contracts/backend';
+import type { Backend, Entry, FileAction } from '../../shared/contracts/backend';
+import { parentPath, useFileActions } from './FileActions';
 
 interface Row extends Entry {
   depth: number;
@@ -7,16 +8,20 @@ interface Row extends Entry {
 export const FileTree = memo(function FileTree({
   api,
   projectId,
+  projectPath,
   active,
   onOpen,
   onError,
+  onAction,
   disabled = false,
 }: {
   api: Backend;
   projectId: string;
+  projectPath?: string;
   active?: string;
   onOpen: (path: string) => void;
   onError: (message: string) => void;
+  onAction: (action: FileAction, path: string, destination?: string) => Promise<void>;
   disabled?: boolean;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
@@ -29,10 +34,85 @@ export const FileTree = memo(function FileTree({
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const tree = useRef<HTMLDivElement>(null);
-  function startCreating(kind: 'file' | 'folder') {
+  const [selected, setSelected] = useState<Row>();
+  const [dropTarget, setDropTarget] = useState<string>();
+  const dragging = useRef<string | undefined>(undefined);
+  const epoch = useRef(0);
+  async function refresh(reveal?: string) {
+    const current = ++epoch.current;
+    const opened = new Set(expanded);
+    if (reveal) {
+      const parts = reveal.split('/').slice(0, -1);
+      for (let index = 1; index <= parts.length; index++)
+        opened.add(parts.slice(0, index).join('/'));
+    }
+    const next = (await api.listEntries(projectId, '')).map((entry) => ({ ...entry, depth: 0 }));
+    for (const folder of [...opened].sort((a, b) => a.split('/').length - b.split('/').length)) {
+      const index = next.findIndex((entry) => entry.path === folder && entry.directory);
+      if (index < 0) {
+        opened.delete(folder);
+        continue;
+      }
+      const children = await api.listEntries(projectId, folder);
+      next.splice(
+        index + 1,
+        0,
+        ...children.map((entry) => ({ ...entry, depth: next[index].depth + 1 })),
+      );
+    }
+    if (current !== epoch.current) return;
+    setRows(next);
+    setExpanded(opened);
+    setSelected((previous) => next.find((entry) => entry.path === (reveal ?? previous?.path)));
+    if (reveal) {
+      const offset = Math.max(0, next.findIndex((entry) => entry.path === reveal) * 32 - 32);
+      if (tree.current) tree.current.scrollTop = offset;
+      setScroll(offset);
+    }
+  }
+  function startCreating(kind: 'file' | 'folder', folder = '') {
     setCreating(kind);
-    setPath('');
+    setPath(folder ? `${folder}/` : '');
     setCreateError('');
+  }
+  const actions = useFileActions({
+    api,
+    projectId,
+    projectPath,
+    disabled,
+    onAction,
+    onRefresh: refresh,
+    onOpen: (path) => {
+      const row = rows.find((entry) => entry.path === path);
+      if (row?.directory) void toggle(row);
+      else onOpen(path);
+    },
+    onCreate: startCreating,
+    onError,
+  });
+  function dragOver(event: React.DragEvent, folder: string) {
+    if (!dragging.current || disabled || actions.pending) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget(folder);
+  }
+  function drop(event: React.DragEvent, folder: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropTarget(undefined);
+    if (disabled || actions.pending) return;
+    try {
+      const data = JSON.parse(event.dataTransfer.getData('application/x-elastic-file')) as {
+        projectId: string;
+        path: string;
+      };
+      if (data.projectId !== projectId || data.path !== dragging.current) return;
+      if (parentPath(data.path) !== folder) void actions.move(data.path, folder);
+    } catch {
+      /* External drags are not file imports. */
+    }
+    dragging.current = undefined;
   }
   async function create() {
     if (!creating || disabled || submitting.current) return;
@@ -75,6 +155,7 @@ export const FileTree = memo(function FileTree({
     submitting.current = false;
   }
   useEffect(() => {
+    epoch.current++;
     let current = true;
     api
       .listEntries(projectId, '')
@@ -89,6 +170,7 @@ export const FileTree = memo(function FileTree({
       });
     return () => {
       current = false;
+      epoch.current++;
     };
   }, [api, projectId, onError, revision]);
   async function toggle(row: Row) {
@@ -103,7 +185,9 @@ export const FileTree = memo(function FileTree({
       );
     } else {
       try {
+        const current = epoch.current;
         const children = await api.listEntries(projectId, row.path);
+        if (current !== epoch.current) return;
         setExpanded((previous) => new Set(previous).add(row.path));
         setRows((previous) => {
           // Ignore duplicate expansion requests and responses after a refresh.
@@ -122,7 +206,46 @@ export const FileTree = memo(function FileTree({
   }
   const start = Math.max(0, Math.floor(scroll / 32) - 5);
   return (
-    <aside className="explorer" aria-label="Project files">
+    <aside
+      className="explorer"
+      aria-label="Project files"
+      onKeyDown={(event) => {
+        if (!(event.target as HTMLElement).closest('.tree-row')) {
+          actions.keyDown(event, selected);
+          return;
+        }
+        const index = rows.findIndex((row) => row.path === selected?.path);
+        const focus = (row: Row | undefined) => {
+          if (!row) return;
+          setSelected(row);
+          const offset = rows.indexOf(row) * 32;
+          if (
+            tree.current &&
+            (offset < tree.current.scrollTop ||
+              offset + 32 > tree.current.scrollTop + tree.current.clientHeight)
+          )
+            tree.current.scrollTop = offset;
+          requestAnimationFrame(() =>
+            tree.current
+              ?.querySelector<HTMLButtonElement>(`[title="${CSS.escape(row.path)}"]`)
+              ?.focus(),
+          );
+        };
+        if (event.key === 'ArrowDown') focus(rows[Math.min(rows.length - 1, index + 1)]);
+        else if (event.key === 'ArrowUp') focus(rows[Math.max(0, index - 1)]);
+        else if (event.key === 'ArrowRight' && selected?.directory && !expanded.has(selected.path))
+          void toggle(selected);
+        else if (event.key === 'ArrowLeft' && selected) {
+          if (selected.directory && expanded.has(selected.path)) void toggle(selected);
+          else focus(rows.find((row) => row.path === parentPath(selected.path)));
+        } else {
+          actions.keyDown(event, selected);
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       <div className="pane-toolbar">
         <span>FILES</span>
         <button
@@ -137,10 +260,16 @@ export const FileTree = memo(function FileTree({
         </button>
       </div>
       <div className="file-actions">
-        <button disabled={disabled || pending} onClick={() => startCreating('file')}>
+        <button
+          disabled={disabled || pending || actions.pending}
+          onClick={() => startCreating('file')}
+        >
           Add file
         </button>
-        <button disabled={disabled || pending} onClick={() => startCreating('folder')}>
+        <button
+          disabled={disabled || pending || actions.pending}
+          onClick={() => startCreating('folder')}
+        >
           Add folder
         </button>
       </div>
@@ -183,17 +312,55 @@ export const FileTree = memo(function FileTree({
         </form>
       )}
       <div
+        className={`tree-root-drop ${dropTarget === '' ? 'drop-target' : ''}`}
+        tabIndex={0}
+        onFocus={() => setSelected(undefined)}
+        onContextMenu={(event) => actions.contextMenu(event)}
+        onDragOver={(event) => dragOver(event, '')}
+        onDrop={(event) => drop(event, '')}
+      >
+        Project folder
+      </div>
+      <div
         ref={tree}
         className="tree-scroll"
         onScroll={(event) => setScroll(event.currentTarget.scrollTop)}
+        onContextMenu={(event) => actions.contextMenu(event)}
+        onDragOver={(event) => dragOver(event, '')}
+        onDrop={(event) => drop(event, '')}
       >
         <div style={{ height: rows.length * 32, position: 'relative' }}>
           {rows.slice(start, start + 60).map((row, index) => (
             <button
               key={row.path}
-              className={`tree-row ${active === row.path ? 'selected' : ''}`}
+              className={`tree-row ${selected?.path === row.path || active === row.path ? 'selected' : ''} ${actions.cutPath === row.path ? 'cut' : ''} ${dropTarget === row.path ? 'drop-target' : ''}`}
               style={{ top: (start + index) * 32, paddingLeft: 16 + row.depth * 16 }}
-              onClick={() => void toggle(row)}
+              onClick={() => {
+                setSelected(row);
+                if (!disabled && !actions.pending) void toggle(row);
+              }}
+              onFocus={() => setSelected(row)}
+              onContextMenu={(event) => {
+                setSelected(row);
+                actions.contextMenu(event, row);
+              }}
+              draggable={!disabled && !pending && !actions.pending}
+              onDragStart={(event) => {
+                dragging.current = row.path;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData(
+                  'application/x-elastic-file',
+                  JSON.stringify({ projectId, path: row.path }),
+                );
+              }}
+              onDragEnd={() => {
+                dragging.current = undefined;
+                setDropTarget(undefined);
+              }}
+              onDragOver={(event) =>
+                dragOver(event, row.directory ? row.path : parentPath(row.path))
+              }
+              onDrop={(event) => drop(event, row.directory ? row.path : parentPath(row.path))}
               title={row.path}
               aria-expanded={row.directory ? expanded.has(row.path) : undefined}
             >
@@ -207,6 +374,7 @@ export const FileTree = memo(function FileTree({
         {!rows.length && <p className="muted small tree-empty">No source files in this folder.</p>}
       </div>
       <div className="explorer-footer">LOCAL PROJECT</div>
+      {actions.overlay}
     </aside>
   );
 });

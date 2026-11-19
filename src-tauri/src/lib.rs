@@ -1,5 +1,6 @@
 mod builds;
 mod commands;
+mod file_actions;
 mod git;
 mod images;
 mod persistence;
@@ -348,6 +349,7 @@ pub fn run() {
             open_project,
             list_entries,
             create_entry,
+            commands::files::file_action,
             save_image,
             read_file,
             save_file,

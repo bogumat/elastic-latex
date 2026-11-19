@@ -164,6 +164,7 @@ export class Documents {
     if (file.revision !== file.savedRevision) this.schedule(file);
   }
   async saveAll() {
+    await Promise.all(this.opening.values());
     const errors: string[] = [];
     // Compilation/project switching must include assets still being imported.
     while (this.pastes.size) {
@@ -195,6 +196,20 @@ export class Documents {
   }
   revisions() {
     return String(this.editRevision);
+  }
+  relocate(from: string, to: string | null) {
+    for (const [path, file] of [...this.files]) {
+      if (path !== from && !path.startsWith(`${from}/`)) continue;
+      clearTimeout(file.timer);
+      clearTimeout(file.deadline);
+      this.files.delete(path);
+      if (to !== null) {
+        file.path = to + path.slice(from.length);
+        this.files.set(file.path, file);
+      }
+    }
+    this.editRevision++;
+    this.emit();
   }
   async reloadSaved(read: (paths: string[]) => Promise<Record<string, FileData | null>>) {
     await Promise.all(this.opening.values());
