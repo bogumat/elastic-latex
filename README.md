@@ -16,9 +16,11 @@ Open `tests/fixtures/article` in the app for a small multi-file example. Select 
 Pressing **⌘ S** during a build or Git operation queues another save-all and compile after it finishes. All edited files are attempted even if one save fails; the failed files retain their edits and report their paths, and compilation stops until saving succeeds. Files are written to their original locations in the working folder; Git commits and pushes remain separate actions.
 
 ```sh
-npm run tauri -- build --bundles app
-open src-tauri/target/release/bundle/macos/Elastic.app
+npm run build:app
+open ~/Applications/Elastic.app
 ```
+
+`npm run build:app` builds the macOS release and updates `~/Applications/Elastic.app`, then registers it with macOS for launchers such as Raycast. Restart Elastic after updating if it is running. A failed build or copy leaves the installed app intact. `npm run install:app` installs an already-built bundle without rebuilding; `npm run build` builds frontend assets only, including when invoked by Tauri's build hook.
 
 The local `.app` is unsigned and not notarized for distribution. `npm run dev` alone opens a clearly labelled browser sample with in-memory files; filesystem access and compilation require the desktop app.
 
