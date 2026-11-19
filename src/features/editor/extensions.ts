@@ -38,6 +38,7 @@ const commands = [
 ];
 export const editorExtensions = [
   lineNumbers(),
+  EditorView.lineWrapping,
   foldGutter(),
   latexFolding,
   highlightActiveLineGutter(),
