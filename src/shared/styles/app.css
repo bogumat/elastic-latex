@@ -1127,6 +1127,33 @@ textarea:focus-visible {
 .settings-panel > input {
   width: 100%;
 }
+.settings-dialog[open] {
+  height: min(680px, 80vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.settings-dialog > header {
+  flex-shrink: 0;
+}
+.settings-dialog .settings-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-dialog .settings-panel > input,
+.settings-dialog .settings-panel > nav,
+.settings-dialog .settings-panel > footer {
+  flex-shrink: 0;
+}
+.settings-dialog .settings-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
 .settings-panel nav {
   display: flex;
   flex-wrap: wrap;

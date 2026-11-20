@@ -27,7 +27,7 @@ export default function Settings({
         ),
   );
   return (
-    <Modal title="Settings" onClose={onClose}>
+    <Modal title="Settings" className="settings-dialog" onClose={onClose}>
       <div className="settings-panel">
         <input
           data-autofocus

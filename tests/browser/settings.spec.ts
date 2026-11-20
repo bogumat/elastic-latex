@@ -12,6 +12,39 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
 });
 
+test('settings keep the same bounds across categories and search, including short windows', async ({
+  page,
+}) => {
+  await page.keyboard.press('Meta+,');
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  const categories = dialog.getByRole('navigation', { name: 'Settings categories' });
+  for (const viewport of [
+    { width: 1360, height: 900 },
+    { width: 900, height: 600 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const bounds = await dialog.boundingBox();
+    for (const category of [
+      'Appearance',
+      'Editor',
+      'Files & Saving',
+      'Workspace',
+      'PDF Viewer',
+      'All',
+    ]) {
+      await categories.getByRole('button', { name: category, exact: true }).click();
+      expect(await dialog.boundingBox()).toEqual(bounds);
+    }
+    await dialog.getByRole('textbox', { name: 'Search settings' }).fill('no-matching-setting');
+    await expect(dialog).toContainText('No settings match');
+    expect(await dialog.boundingBox()).toEqual(bounds);
+    await expect(dialog.getByRole('button', { name: 'Reset defaults' })).toBeInViewport();
+    await expect(dialog.getByRole('button', { name: 'Close Settings' })).toBeInViewport();
+    expect(bounds!.height).toBeLessThanOrEqual(viewport.height * 0.8);
+    await dialog.getByRole('textbox', { name: 'Search settings' }).fill('');
+  }
+});
+
 test('independent PDF dark mode changes no artifacts, rendering, or scroll position', async ({
   page,
 }) => {
