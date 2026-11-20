@@ -10,51 +10,12 @@ import { keymap } from '@codemirror/view';
 import {
   alignmentOptions,
   classOptions,
-  commands,
   graphicOptions,
   packageOptions,
   placements,
 } from './completion-options';
-
-function escaped(text: string, at: number) {
-  let count = 0;
-  while (at > 0 && text[--at] === '\\') count++;
-  return count % 2 === 1;
-}
-
-// Preserve offsets while hiding comments and literal examples. Lookbehind below
-// is bounded, so completion does not scan an entire document on each keystroke.
-function codeContext(source: string) {
-  const parts: string[] = [];
-  const special = /[%\\]/g;
-  let copied = 0;
-  let next: RegExpExecArray | null;
-  while ((next = special.exec(source))) {
-    const index = next.index;
-    let end: number;
-    if (next[0] === '%') end = source.indexOf('\n', index);
-    else {
-      const verb = /^\\verb\*?([^a-zA-Z\s])/.exec(source.slice(index));
-      const environment = /^\\begin\s*\{(verbatim\*?|Verbatim|lstlisting|minted)\}/.exec(
-        source.slice(index),
-      );
-      if (!verb && !environment) {
-        special.lastIndex = index + 2;
-        continue;
-      }
-      const opening = (verb ?? environment)![0];
-      const closing = verb ? verb[1] : `\\end{${environment![1]}}`;
-      end = source.indexOf(closing, index + opening.length);
-      if (end >= 0) end += closing.length;
-    }
-    if (end < 0) return { text: '', literal: true };
-    parts.push(source.slice(copied, index), source.slice(index, end).replace(/[^\n]/g, ' '));
-    copied = end;
-    special.lastIndex = end;
-  }
-  parts.push(source.slice(copied));
-  return { text: parts.join(''), literal: false };
-}
+import { codeContext, escaped } from './latex-syntax';
+import { commandCompletions, environmentCompletions } from './environments';
 
 function segments(text: string) {
   const starts = [0];
@@ -78,13 +39,21 @@ export function latexCompletions(context: CompletionContext): CompletionResult |
   const start = Math.max(0, pos - 4096);
   const before = codeContext(state.sliceDoc(start, pos));
   if (codeContext(prefix).literal || before.literal) return null;
+  const environmentResult = environmentCompletions(context, before.text);
+  if (environmentResult)
+    return {
+      ...environmentResult,
+      update: (_current, _from, _to, next) => latexCompletions(next),
+    };
   const word = context.matchBefore(/\\[a-zA-Z]*/);
   if (word && !escaped(prefix, word.from - line.from)) {
     return {
       from: word.from,
       to: pos + (state.sliceDoc(pos, line.to).match(/^[a-zA-Z]*/)?.[0].length ?? 0),
-      options: commands,
-      validFor: /^\\[a-zA-Z]*$/,
+      options: commandCompletions(state, word.from, word.text),
+      validFor: (text) =>
+        /^\\[a-zA-Z]*$/.test(text) &&
+        (/^\\e(?:n(?:d)?)?$/.test(word.text) || !/^\\e(?:n(?:d)?)?$/.test(text)),
     };
   }
   const match =
@@ -154,7 +123,10 @@ export const latexCompletion = [
     override: [latexCompletions],
     defaultKeymap: false,
     interactionDelay: 0,
-    activateOnCompletion: (completion) => completion.label.endsWith('='),
+    activateOnCompletion: (completion) =>
+      completion.label.endsWith('=') ||
+      completion.label === '\\begin' ||
+      completion.label === '\\end',
   }),
   Prec.highest(
     keymap.of([

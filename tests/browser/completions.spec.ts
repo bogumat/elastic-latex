@@ -127,3 +127,89 @@ test('editing existing commands and option names preserves the remaining source'
   await page.keyboard.press('Tab');
   await expect(page.locator('.cm-content')).toHaveText('\\includegraphics[width=3cm]{image.png}');
 });
+
+test('begin completion creates a complete list and places typing after the first item', async ({
+  page,
+}) => {
+  await source(page, '\\beg');
+  await expect(label(page, '\\begin')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cm-content')).toHaveText('\\begin{}');
+  await expect(label(page, 'itemize')).toBeVisible();
+  await page.keyboard.type('ite', { delay: 30 });
+  await expect(selected(page)).toHaveText('itemize');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cm-line')).toHaveText([
+    '\\begin{itemize}',
+    '  \\item ',
+    '\\end{itemize}',
+    '',
+  ]);
+  await page.keyboard.insertText('hello');
+  await expect(page.locator('.cm-line').nth(1)).toHaveText('  \\item hello');
+  await page.keyboard.press('Tab');
+  await page.keyboard.insertText('After the list');
+  await expect(page.locator('.cm-line').last()).toHaveText('After the list');
+});
+
+test('Tab expands a manually typed environment opening into a matching block', async ({ page }) => {
+  await source(page, '\\begin{enumerate}');
+  await expect(label(page, '\\begin{enumerate}')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await page.keyboard.insertText('First item');
+  await expect(page.locator('.cm-line')).toHaveText([
+    '\\begin{enumerate}',
+    '  \\item First item',
+    '\\end{enumerate}',
+    '',
+  ]);
+});
+
+test('end completion tracks nested environments while typing and completes missing braces', async ({
+  page,
+}) => {
+  await source(
+    page,
+    '\\begin{itemize}\n  \\item Outer\n  \\begin{enumerate}\n    \\item Inner\n  ',
+  );
+  await page.keyboard.insertText('\\');
+  await expect(menu(page)).toBeVisible();
+  await page.keyboard.type('en', { delay: 40 });
+  await expect(selected(page)).toHaveText('\\end{enumerate}');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cm-line').last()).toHaveText('  \\end{enumerate}');
+  await page.keyboard.press('Enter');
+  await page.keyboard.insertText('\\end{');
+  await expect(selected(page)).toHaveText('itemize');
+  await expect(label(page, 'enumerate')).not.toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cm-line').last()).toContainText('\\end{itemize}');
+});
+
+test('finishing an existing opening preserves its contents and closing tag', async ({ page }) => {
+  await source(page, '\\begin{it', 'mize}\n  \\item Retained text\n\\end{itemize}');
+  await page.keyboard.insertText('e');
+  await expect(label(page, 'itemize')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cm-line')).toHaveText([
+    '\\begin{itemize}',
+    '  \\item Retained text',
+    '\\end{itemize}',
+  ]);
+});
+
+test('command completion takes priority over snippet Tab navigation inside an item', async ({
+  page,
+}) => {
+  await source(page, '\\begin{it');
+  await expect(label(page, 'itemize')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await page.keyboard.insertText('\\textb');
+  await expect(label(page, '\\textbf')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await page.keyboard.insertText('{hello}');
+  await expect(page.locator('.cm-line').nth(1)).toHaveText('  \\item \\textbf{hello}');
+  await page.keyboard.press('Tab');
+  await page.keyboard.insertText('After');
+  await expect(page.locator('.cm-line').last()).toHaveText('After');
+});
