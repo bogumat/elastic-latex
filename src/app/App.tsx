@@ -223,7 +223,9 @@ export default function App() {
         <>
           <header className="app-header">
             <div className="brand">
-              <span className="brand-mark">e</span>
+              <span className="brand-mark" aria-hidden="true">
+                ε
+              </span>
               <strong>Elastic</strong>
             </div>
             <button

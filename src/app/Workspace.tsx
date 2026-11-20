@@ -373,7 +373,9 @@ export default function Workspace({
     <>
       <header className="app-header">
         <div className="brand">
-          <span className="brand-mark">e</span>
+          <span className="brand-mark" aria-hidden="true">
+            ε
+          </span>
           <strong>Elastic</strong>
           <span className="header-divider" />
           <span title={project.path}>{project.name}</span>

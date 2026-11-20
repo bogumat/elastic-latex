@@ -22,6 +22,8 @@ open ~/Applications/Elastic.app
 
 `npm run build:app` builds the macOS release and updates `~/Applications/Elastic.app`, then registers it with macOS for launchers such as Raycast. Restart Elastic after updating if it is running. A failed build or copy leaves the installed app intact. `npm run install:app` installs an already-built bundle without rebuilding; `npm run build` builds frontend assets only, including when invoked by Tauri's build hook.
 
+The app icon is an editable vector in `src/assets/icon.svg`. `npm run icons` regenerates the PNG and macOS icon bundle from it; `npm run build:app` does this automatically.
+
 The local `.app` is unsigned and not notarized for distribution. `npm run dev` alone opens a clearly labelled browser sample with in-memory files; filesystem access and compilation require the desktop app.
 
 The development session that created this prototype used an isolated temporary Rust installation. If it still exists, the equivalent command is:

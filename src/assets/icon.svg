@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect x="4" y="4" width="120" height="120" rx="26" fill="#486581"/><path d="M88 75H43c1 14 10 22 22 22 9 0 16-3 22-9M43 63h45c-1-16-10-25-23-25S43 50 43 67" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Elastic — glossy lowercase epsilon</title>
+  <defs>
+    <linearGradient id="body" x1="220" y1="100" x2="760" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86c9f5"/><stop offset=".3" stop-color="#468fd0"/><stop offset=".62" stop-color="#245999"/><stop offset="1" stop-color="#142f60"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="220" y1="88" x2="780" y2="922" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e9faff"/><stop offset=".35" stop-color="#86c9f2"/><stop offset=".66" stop-color="#193a70"/><stop offset="1" stop-color="#7eacde"/>
+    </linearGradient>
+    <radialGradient id="pool" cx=".68" cy="1" r=".8"><stop stop-color="#46a9e9" stop-opacity=".56"/><stop offset="1" stop-color="#397dc4" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gloss" x1="370" y1="100" x2="520" y2="540" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".65"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="pearl" x1="420" y1="260" x2="650" y2="800" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".42" stop-color="#f4fbff"/><stop offset=".72" stop-color="#c4e4f8"/><stop offset="1" stop-color="#f4fcff"/></linearGradient>
+    <linearGradient id="shine" x1="220" y1="110" x2="790" y2="180" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity="0"/><stop offset=".35" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#0d1f3c" flood-opacity=".28"/></filter>
+    <filter id="raised" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#102e59" flood-opacity=".45"/></filter>
+    <rect id="tile" x="96" y="88" width="832" height="832" rx="190"/>
+    <path id="epsilon" d="M699 290C650 256 598 240 536 240C421 240 339 300 339 384C339 442 370 477 421 496C350 515 304 565 304 631C304 727 391 787 512 787C593 787 666 763 724 717L679 647C630 684 580 702 528 702C456 702 414 676 414 632C414 591 456 568 528 568H627L644 480H543C480 480 445 456 445 417C445 364 488 329 548 329C593 329 636 343 674 369Z"/>
+    <clipPath id="tileClip"><use xlink:href="#tile"/></clipPath>
+  </defs>
+  <use xlink:href="#tile" fill="url(#body)" filter="url(#shadow)"/>
+  <g clip-path="url(#tileClip)">
+    <use xlink:href="#tile" fill="url(#pool)"/>
+    <path d="M88 88H936V358C730 315 434 491 88 435Z" fill="url(#gloss)"/>
+    <rect x="108" y="100" width="808" height="808" rx="179" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/>
+    <use xlink:href="#epsilon" transform="translate(0 7)" fill="#1b447c" opacity=".38"/>
+    <use xlink:href="#epsilon" fill="url(#pearl)" filter="url(#raised)"/>
+    <use xlink:href="#epsilon" fill="none" stroke="#fff" stroke-opacity=".58" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+  <use xlink:href="#tile" fill="none" stroke="url(#edge)" stroke-width="4"/>
+  <path d="M178 151C212 119 250 108 296 108H721C776 108 822 125 856 157" fill="none" stroke="url(#shine)" stroke-width="5" stroke-linecap="round"/>
+</svg>

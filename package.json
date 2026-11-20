@@ -6,14 +6,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "build:app": "tauri build --bundles app && npm run install:app",
+    "build:app": "npm run icons && tauri build --bundles app && npm run install:app",
     "install:app": "node scripts/install-app.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "test": "vitest run",
     "test:browser": "playwright test",
     "format": "prettier --write src scripts tests/browser *.ts *.json",
-    "fixtures": "node scripts/generate-fixtures.mjs"
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.0",
