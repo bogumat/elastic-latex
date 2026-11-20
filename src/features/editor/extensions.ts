@@ -1,4 +1,3 @@
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import {
   bracketMatching,
@@ -13,6 +12,7 @@ import {
 } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { latexFolding } from './folding';
+import { latexCompletion } from './completions';
 import { tags } from '@lezer/highlight';
 import { darkTheme, type EditorSettings } from '../settings/preferences';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
@@ -26,20 +26,6 @@ import {
   lineNumbers,
 } from '@codemirror/view';
 
-const commands = [
-  'section',
-  'subsection',
-  'textbf',
-  'textit',
-  'emph',
-  'label',
-  'ref',
-  'cite',
-  'includegraphics',
-  'input',
-  'begin',
-  'end',
-];
 export const editorExtensions = [
   foldGutter(),
   latexFolding,
@@ -50,26 +36,8 @@ export const editorExtensions = [
   highlightSelectionMatches(),
   StreamLanguage.define(stex),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  autocompletion({
-    override: [
-      (context) => {
-        const word = context.matchBefore(/\\[a-zA-Z]*/);
-        if (!word || (word.from === word.to && !context.explicit)) return null;
-        return {
-          from: word.from,
-          options: commands.map((command) => ({ label: `\\${command}`, type: 'keyword' })),
-        };
-      },
-    ],
-  }),
-  keymap.of([
-    ...defaultKeymap,
-    ...foldKeymap,
-    ...historyKeymap,
-    ...searchKeymap,
-    ...completionKeymap,
-    indentWithTab,
-  ]),
+  latexCompletion,
+  keymap.of([...defaultKeymap, ...foldKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
   EditorView.theme({
     '&': { height: '100%', backgroundColor: 'var(--surface)' },
     '.cm-scroller': {

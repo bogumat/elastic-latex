@@ -60,6 +60,7 @@ Install your own normal Rust toolchain for ongoing development; `/private/tmp` i
 - Locally bundled PDF.js worker/resources, continuous scrolling with offscreen canvas eviction, selectable text, page navigation, zoom, fit width, and PDF export.
 - Double-click PDF text or images to open the matching `.tex` source line using SyncTeX. PDF-only view switches to Split so the source is visible. Recompile after source changes for accurate navigation.
 - Collapse environments, multiline brace groups, and section contents using the arrows beside source line numbers; click the folded placeholder to expand again. Folding only affects display; hidden text is still saved and compiled.
+- LaTeX completion uses **Tab** to accept, **↑/↓** to choose, and **Esc** to dismiss; **Enter** inserts a newline. Square brackets offer context-specific options for floats, image sizing, standard document classes, alignment, and common packages such as geometry and hyperref. Key/value options also suggest common values; custom values remain editable. These are curated suggestions, not a complete catalog of every LaTeX package.
 - Source/split/PDF views and a keyboard-accessible source/preview divider.
 
 ## Settings and code review
